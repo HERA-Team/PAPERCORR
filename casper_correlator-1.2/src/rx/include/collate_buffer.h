@@ -23,7 +23,6 @@
 #define ADC_RATE        100000000
 #define TIME_SCALE      128
 #define ACC_RANGE       2
-#define XENG_CHAN_MODE_CONTIGUOUS 1
 
 //ACC_RANGE is seconds around current timestamp which should be accepted as valid timestamps.
 //ADC_RATE is ADC sample rate in Hz. Used for scaling timestamps from correlator.

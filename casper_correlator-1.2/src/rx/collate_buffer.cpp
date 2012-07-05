@@ -209,6 +209,8 @@ void set_cb_callback(CollateBuffer *cb,
 #define ADDR(cb,i,j,pol,ch,win) \
     (2*(HASHBL(i,j) + cb.nbl*(pol + cb.npol*(ch + cb.nchan*(win)))))
 
+#define PFLOAT(p) ((float *)(p))
+
 // Put an incoming packet in the correct place in memory, and initiate
 // readout via a callback, which is passed cb->userdata
 int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
@@ -263,12 +265,27 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                 for (ch=0; ch < cb->nchan; ch++) {
                     addr = ADDR((*cb),i,j,pol,ch,cb->rd_win);
                     //Scale data back to 4bit*4bit values, and correct for PAPER's reversed channel order.
-                    data[2*((cb->nchan -1) - ch)] = (float) cb->buf[addr] / cb->acc_len;
-                    data[2*((cb->nchan -1) - ch)+1] = (float) cb->buf[addr+1] / cb->acc_len;
-                    flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
-                    //data[2*ch] = (float) cb->buf[addr];
-                    //data[2*ch+1] = (float) cb->buf[addr+1];
-                    if (i==1 && j==1 && pol==0 && (ch<20)) fprintf(stdout," (%2i,%2i, pol %i,Ch:%4i): %8i + %8ij FLAG: %i\n", i,j,pol,ch, cb->buf[addr],cb->buf[addr+1],cb->flagbuf[addr/2]);
+                    // Assume current packet's instrument_id matches previous packets' instrument_ids.
+                    if(pkt.instids.instrument_id == INSTRUMENT_ID_PAPER_FPGA_X_ENGINE) {
+                        // Cast buf's ints to floats and divide by acc_len
+                        data[2*((cb->nchan -1) - ch)  ] = (float) cb->buf[addr  ] / cb->acc_len;
+                        data[2*((cb->nchan -1) - ch)+1] = (float) cb->buf[addr+1] / cb->acc_len;
+                        flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
+                        if (i==1 && j==1 && pol==0 && (ch<20))
+                            fprintf(stdout," (%2i,%2i, pol %i,Ch:%4i): %8i + %8ij FLAG: %i\n",
+                                i,j,pol,ch, cb->buf[addr],cb->buf[addr+1],cb->flagbuf[addr/2]);
+                    } else {
+                        // Cast buf to float pointer and divide by acc_len
+                        data[2*((cb->nchan -1) - ch)  ] = PFLOAT(cb->buf)[addr  ] / cb->acc_len;
+                        data[2*((cb->nchan -1) - ch)+1] = PFLOAT(cb->buf)[addr+1] / cb->acc_len;
+                        flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
+                        if (i==1 && j==1 && pol==0 && (ch<20))
+                            fprintf(stdout," (%2i,%2i, pol %i,Ch:%4i): %8.4f + %8.4fj FLAG: %i\n",
+                                i,j,pol,ch,
+                                PFLOAT(cb->buf)[addr],
+                                PFLOAT(cb->buf)[addr+1],
+                                cb->flagbuf[addr/2]);
+                    }
                     //if (i ==0 && j == 0 && pol == 0 && ch > 500 && ch < 520) fprintf(stderr,"0x: Scaled Window Ch:%i, D1: %f, D2: %f\n", ch, data[2*ch], data[2*ch+1]);
                     //if (i <= 3 && j <= 3 && ch == 1 && (pol==0 || pol==1)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch, ((int32_t *)(pkt.data + cnt))[0], ((int32_t *)(pkt.data + cnt))[1]);
                     //if (i <= 3 && j <= 3 && ch > 500 && ch<520 && (pol==0 || pol==1)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch, ((int32_t *)(pkt.data + cnt))[0], ((int32_t *)(pkt.data + cnt))[1]);
@@ -312,7 +329,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
         ch = nvals / (cb->npol * cb->nbl); //freq channel on this xeng.
         //~ch = (nvals / cb->npol / cb->nbl) % ch_per_x; //freq channel on this xeng.
         //~//ch = ch * cb->nant + pkt.instids.engine_id;
-        if(cb->xeng_chan_mode == XENG_CHAN_MODE_CONTIGUOUS) {
+        if(pkt.instids.instrument_id == INSTRUMENT_ID_PAPER_GPU_X_ENGINE) {
           ch += ((cb->nchan /(cb->nant/cb->nants_per_feng)) * pkt.instids.engine_id);
         } else {
           ch = (ch % ch_per_x) * (cb->nant /X_PER_F) + pkt.instids.engine_id;
@@ -335,8 +352,16 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
 #endif
         }
         // Copy real and then imaginary part
-        cb->buf[addr] = ((int32_t *)(pkt.data + cnt))[0];
-        cb->buf[addr+1] = ((int32_t *)(pkt.data + cnt))[1];
+        if(pkt.instids.instrument_id == INSTRUMENT_ID_PAPER_FPGA_X_ENGINE) {
+            // Cast (pkt.data+cnt) to int32_t pointer and store in cb->buf
+            cb->buf[addr  ] = ((int32_t *)(pkt.data + cnt))[0];
+            cb->buf[addr+1] = ((int32_t *)(pkt.data + cnt))[1];
+        } else {
+            // Cast (pkt.data+cnt) to float pointer and store in cb->buf (also
+            // cast as a float pointer).
+            PFLOAT(cb->buf)[addr  ] = PFLOAT(pkt.data + cnt)[0];
+            PFLOAT(cb->buf)[addr+1] = PFLOAT(pkt.data + cnt)[1];
+        }
         // Register that we got this data
         cb->flagbuf[addr/2] = 0;
         xids[pkt.instids.engine_id]++;

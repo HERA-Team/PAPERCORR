@@ -54,6 +54,11 @@ typedef struct {
  uint16_t engine_id;
 } InstIds;
 
+// instrument_id of 3 is used for PAPER_FPGA X Engine
+// instrument_id of 4 is used for PAPER_GPU X Engine
+#define INSTRUMENT_ID_PAPER_FPGA_X_ENGINE (3)
+#define INSTRUMENT_ID_PAPER_GPU_X_ENGINE (4)
+
 //void unpack_insttype(InstType *it, uint64_t opt);
 //uint64_t pack_insttype(InstType it);
 

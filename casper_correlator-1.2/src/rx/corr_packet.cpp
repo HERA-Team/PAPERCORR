@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "include/corr_packet.h"
 
 void unpack_instids(InstIds *id, uint64_t opt) {
@@ -86,10 +87,11 @@ void unpack_header(CorrPacket *pkt, char *data) {
         throw PacketError("pkt.pktinfo.len > MAX_PAYLOAD_SIZE");
 }
 
-#define IND8(data,n) ((uint8_t *)(data + n))[0]
-#define IND16(data,n) ((uint16_t *)(data + 2*n))[0]
-#define IND32(data,n) ((int32_t *)(data + 4*n))[0]
-#define IND64(data,n) ((uint64_t *)(data + 8*n))[0]
+#define IND8(data,n)  (((uint8_t  *)data)[n])
+#define IND16(data,n) (((uint16_t *)data)[n])
+#define IND32(data,n) (((int32_t  *)data)[n])
+#define IND64(data,n) (((uint64_t *)data)[n])
+#define FLOAT(data,n) (((float    *)data)[n])
 
 #define GET8(data,n) IND8(data,n)
 #define GET16(data,n) ntohs(IND16(data,n))
@@ -106,16 +108,24 @@ void unpack_data(CorrPacket *pkt, char *data) {
     // Assumes data pointer (pointing to start of payload) is valid, and 
     // packet header info has been set.  
     // Based solely on instrument type.
-    // Type 3 is 32 bit LSB first data
     uint64_t i;
     switch (pkt->instids.instrument_id) {
-        case 3:
+        case INSTRUMENT_ID_PAPER_FPGA_X_ENGINE:
+            // 32 bit big endian (aka network byte order) integer data
             for (i=0; i < (pkt->pktinfo.len / 4); i++) {
                 IND32(pkt->data,i) = GET32(data,i);
             }
             break;
+        case INSTRUMENT_ID_PAPER_GPU_X_ENGINE:
+            // 32 bit little endian float data
+            for (i=0; i < (pkt->pktinfo.len / 4); i++) {
+                FLOAT(pkt->data,i) = FLOAT(data,i);
+            }
+            break;
         default:
-            throw PacketError("Unknown instrument type. (!= 3)");
+            char msg[128];
+            sprintf(msg, "Unknown instrument id (%d)", pkt->instids.instrument_id);
+            throw PacketError(msg);
     }
 }
 
