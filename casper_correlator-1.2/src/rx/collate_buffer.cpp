@@ -330,7 +330,12 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
         //~ch = (nvals / cb->npol / cb->nbl) % ch_per_x; //freq channel on this xeng.
         //~//ch = ch * cb->nant + pkt.instids.engine_id;
         if(pkt.instids.instrument_id == INSTRUMENT_ID_PAPER_GPU_X_ENGINE) {
-          ch += ((cb->nchan /(cb->nant/cb->nants_per_feng)) * pkt.instids.engine_id);
+          // The "/2" is because we have half as many F engines as X engines in
+          // the current incarnation of the PAPER GPU correlator.  Ideally the
+          // total number of X engines would be passed in either from the
+          // config file or in the packet header, but for now we hard code it
+          // to 2. :-(
+          ch += ((cb->nchan /(cb->nant/cb->nants_per_feng/2)) * pkt.instids.engine_id);
         } else {
           ch = (ch % ch_per_x) * (cb->nant /X_PER_F) + pkt.instids.engine_id;
         }
