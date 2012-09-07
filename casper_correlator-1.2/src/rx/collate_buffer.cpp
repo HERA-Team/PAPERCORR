@@ -125,7 +125,7 @@ void init_collate_buffer(CollateBuffer *cb, int nant, int nants_per_feng, int nc
     cb->userdata = NULL;
 
     // setup signal display addresses
-    if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
+    if ((sock = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
      perror("socket() failed");
      exit(1);
     }
