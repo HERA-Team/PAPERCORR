@@ -7,11 +7,6 @@
 #define SDISP_PHASE_SPECTRUM 0x0002
 #define MAX_SDISP_IP_COUNT 10
 #define SDISP_PACKET_SIZE 8192
- 
-char *sdisp_ips[MAX_SDISP_IP_COUNT];
-struct sockaddr_in base_addr;
-struct sockaddr_in listener_addr;
-int sock;
 
 struct sdisp_complex {
  float re;

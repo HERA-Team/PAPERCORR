@@ -2,6 +2,12 @@
 #include "include/collate_buffer.h"
 #include "include/sdisp.h"
 
+// sdisp_ips is never set to anything useful, but maybe it someday will be(?)
+static char *sdisp_ips[MAX_SDISP_IP_COUNT] = {0};
+static struct sockaddr_in base_addr = {0};
+static struct sockaddr_in listener_addr = {0};
+static int sock = -1;
+
 // A callback receives per-baseline spectra and metadata
 // "data" and "flags" are pointers to buffers of length 2*nchan and nchan,
 // respectively, that have been
@@ -203,12 +209,13 @@ void set_cb_callback(CollateBuffer *cb,
 #define ADDR(cb,i,j,pol,ch,win) \
     (2*(HASHBL(i,j) + cb.nbl*(pol + cb.npol*(ch + cb.nchan*(win)))))
 
-int xids[8] = {0,0,0,0,0,0,0,0};
-int packet_count = 0;
-time_t ppt = 0;
 // Put an incoming packet in the correct place in memory, and initiate
 // readout via a callback, which is passed cb->userdata
 int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
+    static int xids[8] = {0,0,0,0,0,0,0,0};
+    static int packet_count = 0;
+    static time_t ppt = 0;
+
     int prev_cnt, nvals, ch_per_x;
     int bl, pol, ch;
     int64_t cnt, pkt_t, pkt_ts;
