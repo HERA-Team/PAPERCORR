@@ -14,7 +14,8 @@ register_fengine_control = construct.BitStruct('feng_ctl',
         construct.Flag('gbe_sw_disable'),     #18
         construct.Flag('arm_rst'),            #17
         construct.Flag('sync_rst'),           #16
-        construct.Padding(13),                #3-15
+        construct.Flag('arm_noise'),          #15
+        construct.Padding(12),                #3-14
         construct.Flag('lb_err_cnt_rst'),     #2
         construct.Padding(2))                 #0-1
 

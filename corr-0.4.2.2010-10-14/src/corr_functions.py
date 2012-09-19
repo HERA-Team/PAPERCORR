@@ -249,7 +249,7 @@ class Correlator:
 
     def feng_ctrl_set_all(self, **kwargs):
         """Valid keyword args include: 
-        'gbe_gpu_rst', 'gbe_sw_rst', 'loopbacl_mux_rst', 'cnt_rst', 'fft_preshift', 'gpio_monsel', 'fft_tvg2', 'fft_tvg1', 'gbe_gpu_disable','use_qdr_tvg', 'gbe_sw_disable', 'arm_rst', 'sync_rst', 'lb_err_cnt_rst'   
+        'gbe_gpu_rst', 'gbe_sw_rst', 'loopbacl_mux_rst', 'cnt_rst', 'fft_preshift', 'gpio_monsel', 'fft_tvg2', 'fft_tvg1', 'gbe_gpu_disable','use_qdr_tvg', 'gbe_sw_disable', 'arm_rst', 'sync_rst', 'arm_noise', 'lb_err_cnt_rst'
         """
         write_masked_register(self.fpgas, corr.bitfields.register_fengine_control, **kwargs)
 
