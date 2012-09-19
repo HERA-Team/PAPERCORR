@@ -105,6 +105,10 @@ try:
     trig_time = numpy.ceil(time.time())
     print('Armed. Expect trigg at %s local.'%(time.strftime('%H:%M:%S',time.localtime(trig_time)))),
     mcache.set('roachf_init_time', str(trig_time))        
+    # Sleep to let sync occur
+    time.sleep(1)
+    # Seed all noise generators
+    p.feng_ctrl_set_all(arm_noise='pulse')
     print ('done')
 
     #Set antennae base.
