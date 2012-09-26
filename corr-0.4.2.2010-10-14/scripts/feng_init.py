@@ -125,7 +125,6 @@ try:
         f.write_int('fft_shift', p.config['fft_shift'])
         f.write_int('input_selector', 0x33333333)
         #mcache.set('pf%d:fft_shift'%i, opts.fft_shift)
-    p.fpgas[2].write_int('input_selector',0x33333333)
     print 'done.'
 
     #configure network stuff.
