@@ -330,12 +330,11 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
         //~ch = (nvals / cb->npol / cb->nbl) % ch_per_x; //freq channel on this xeng.
         //~//ch = ch * cb->nant + pkt.instids.engine_id;
         if(pkt.instids.instrument_id == INSTRUMENT_ID_PAPER_GPU_X_ENGINE) {
-          // The "/2" is because we have half as many F engines as X engines in
-          // the current incarnation of the PAPER GPU correlator.  Ideally the
-          // total number of X engines would be passed in either from the
-          // config file or in the packet header, but for now we hard code it
-          // to 2. :-(
-          ch += ((cb->nchan /(cb->nant/cb->nants_per_feng/2)) * pkt.instids.engine_id);
+          // If there is a 1:N ratio of X engines to F engines (i.e. N times
+          // more F engines than X engines), then the "n_ants_per_feng" setting
+          // in the config file should be the real number of antennas per F
+          // engine multipled by N.
+          ch += ((cb->nchan /(cb->nant/cb->nants_per_feng)) * pkt.instids.engine_id);
         } else {
           ch = (ch % ch_per_x) * (cb->nant /X_PER_F) + pkt.instids.engine_id;
         }
