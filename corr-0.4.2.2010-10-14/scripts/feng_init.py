@@ -171,14 +171,32 @@ try:
         fpga.config_10gbe_core('switch_gbe3', mac, ip, port, arp_table)
     
 
-    gbe_gpu_ip = p.config['10gbe_gpu_ip']
+    ### Setup F-Engine-to-GPU 10 GbE cores
+
     gbe_gpu_port = p.config['10gbe_gpu_port']
 
     arp_table = [(2**48)-1 for i in range(256)]
     for i, fpga in enumerate(p.fpgas):
-        #get roach gbe autoincrements the ip address. We don't want that for the 10gbe gpu cores. We ignore the ip address given to us by this function.
-        mac, ipignore, port = p.get_roach_gbe_conf(gbe_gpu_ip, i, gbe_gpu_port)
-        #for v1 of 10gbe core...
+        # We compute our own F-Engine-to-GPU source IP address by changing the
+        # last octect of the destination IP address to 254.  Note that this is
+        # better than using a single, fixed source IP address for all
+        # F-engine-to-GPU 10 GbE cores because it allows the destination
+        # addresses to be in different subnets, but it still results in
+        # multiple interfaces having the same source IP address so, as with
+        # using a single IP address for all such interfaces, it is not really
+        # suitable for use with a switch between the F Engines and the X
+        # boxes (it is only for direct connect).
+        gbe_gpu_ip = (p.config['gpu_ips'][i] & ~0xff) + 254
+
+        # get_roach_gbe_conf adds the second parameter (normally an
+        # incrementing FPGA number) to the IP address (first parameter) to
+        # generate (incrementing) IP addresses.  We don't want that for the
+        # F-Engine-to-GPU 10 GbE cores since we've already calculated the
+        # desired source address, so we ignore the returned IP address and
+        # pass in 0 for the FPGA number.
+        mac, ipignore, port = p.get_roach_gbe_conf(gbe_gpu_ip, 0, gbe_gpu_port)
+
+        # for v1 of 10gbe core...
         arp_table[gbe_gpu_ip%256]=mac
         fpga.config_10gbe_core('gpu_gbe2',mac,gbe_gpu_ip,port,arp_table)
         #fpga.tap_start('gbe_gpu','2GPU_gbe_gpu',mac, ip, port)
