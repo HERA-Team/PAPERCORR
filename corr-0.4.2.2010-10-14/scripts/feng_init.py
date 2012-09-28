@@ -162,10 +162,10 @@ try:
     #pre- populating the arp tables
     for i in range(ninputs/8):
         mac, ip, port = p.get_roach_gbe_conf(gbe_sw_ip_base, i, gbe_sw_port)
-        print mac, ip 
+        #print mac, ip 
         arp_table[ip%256] = mac
 
-    print arp_table
+    #print arp_table
     for i, fpga in enumerate(p.fpgas):
         mac, ip, port = p.get_roach_gbe_conf(gbe_sw_ip_base,i,gbe_sw_port)
         fpga.config_10gbe_core('switch_gbe3', mac, ip, port, arp_table)
@@ -201,8 +201,6 @@ try:
         fpga.config_10gbe_core('gpu_gbe2',mac,gbe_gpu_ip,port,arp_table)
         #fpga.tap_start('gbe_gpu','2GPU_gbe_gpu',mac, ip, port)
 
-    print('waiting 30 seconds for arp to complete'),
-    time.sleep(30)
     print('done')
 
 
