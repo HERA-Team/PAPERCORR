@@ -2,7 +2,7 @@ from distutils.core import setup, Extension
 
 import os, glob, numpy, sys
 
-__version__ = '1.4.0'
+__version__ = '1.5.0'
 
 def indir(dir, files): return [dir+f for f in files]
 def globdir(dir, files): 
