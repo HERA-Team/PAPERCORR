@@ -87,7 +87,7 @@ try:
     for s,server in enumerate(c.config['servers']): c.loggers[s].setLevel(10)
     print 'done'
     
-    #FLUSH MEMCACHED BEFORE STARTING CORRELATOR AGAIN...Only if it is full restart (i.e. also resyincing ibobs). else Do not flush the cache.
+    #FLUSH REDIS BEFORE STARTING CORRELATOR AGAIN...Only if it is full restart (i.e. also resyincing ibobs). else Do not flush the cache.
     if not opts.initialize:
         print 'Flushing memcache'
         c.mcache.flush_all()
