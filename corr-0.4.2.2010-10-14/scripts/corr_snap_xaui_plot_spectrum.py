@@ -37,7 +37,7 @@ def exit_clean():
     except: pass
     exit()
 
-def xaui_feng_unpack(xeng,xaui_port,bram_dump,hdr_index,pkt_len,skip_indices,mcache):
+def xaui_feng_unpack(xeng,xaui_port,bram_dump,hdr_index,pkt_len,skip_indices,redis):
     pkt_64bit = struct.unpack('>Q',bram_dmp['bram_msb'][(4*hdr_index):(4*hdr_index)+4]+bram_dmp['bram_lsb'][(4*hdr_index):(4*hdr_index)+4])[0]
     pkt_mcnt =(pkt_64bit&((2**64)-(2**16)))>>16
     #pkt_ant  = xeng*c.config['n_xaui_ports_per_fpga']*c.config['n_ants_per_xaui'] + xaui_port*c.config['n_ants_per_xaui'] + pkt_64bit&((2**16)-1)
@@ -62,16 +62,16 @@ def xaui_feng_unpack(xeng,xaui_port,bram_dump,hdr_index,pkt_len,skip_indices,mca
         raw_xaui_data = bram_dmp['bram_msb'][(4*abs_index):(4*abs_index)+4]+bram_dmp['bram_lsb'][(4*abs_index):(4*abs_index)+4]
         #save raw data to redis with the following format:
         #px?:snap_xaui_raw:antenna:channel = string of length 128 (each sample of a single channel ) * 1(change format to one byte instead of nibble) * 2(r,i) * 2(dual pol)
-        if mcache.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq)) == None:
-            mcache.set('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq), '')
-        if len(mcache.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq))) == 256:
+        if redis.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq)) == None:
+            redis.set('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq), '')
+        if len(redis.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq))) == 256:
             #print 'writing Ant%d, Chan%d into redis.'%(pkt_ant,pkt_freq)
-            mcache.set('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq), '')
+            redis.set('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq), '')
             
    
-        mcache.set('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq),mcache.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq)) + raw_xaui_data) 
+        redis.set('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq),redis.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq)) + raw_xaui_data) 
         #if (pkt_ant==0 and pkt_freq == 650): 
-            #print len(mcache.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq)))
+            #print len(redis.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq)))
         for offset in range(48,-16,-16):
             polQ_r = (pkt_64bit >> (offset + 12)) & 0xf
             polQ_i = (pkt_64bit >> (offset +  8)) & 0xf
@@ -138,7 +138,7 @@ try:
     for s,server in enumerate(c.config['servers']): c.loggers[s].setLevel(10)
     print 'done.'
     
-    mcache = redis.Redis(host='%s'%c.config['rx_udp_ip_str'])
+    redis = redis.Redis(host='%s'%c.config['rx_udp_ip_str'])
 
     packet_len=c.config['10gbe_pkt_len']
     n_chans=c.config['n_chans']
@@ -231,7 +231,7 @@ try:
                     print 'MALFORMED PACKET! of length %i starting at index %i'%(pkt_len-len(skip_indices),i)
                     print 'skip_indices: (%i numbers):'%len(skip_indices),skip_indices
                 else:
-                    feng_unpkd_pkt=xaui_feng_unpack(target_fpga,target_xaui,bram_dmp,pkt_hdr_idx,pkt_len,skip_indices,mcache)
+                    feng_unpkd_pkt=xaui_feng_unpack(target_fpga,target_xaui,bram_dmp,pkt_hdr_idx,pkt_len,skip_indices,redis)
                     if opts.verbose: print '[Pkt@ %4i Len: %2i]     (MCNT %12u ANT: %1i, Freq: %4i)    {4 bit: Qr: %1.2f Qi: %1.2f Ir %1.2f Ii: %1.2f}'%(\
                         pkt_hdr_idx,\
                         pkt_len-len(skip_indices),\
@@ -279,7 +279,7 @@ try:
     print '\n\nDone Capturing. Plotting...' 
     
     for input in range(c.config['n_ants_per_xaui']):
-        mcache.set('snap_xaui:%d'%((ant/4)*4*2+input),snaps[input].tostring())
+        redis.set('snap_xaui:%d'%((ant/4)*4*2+input),snaps[input].tostring())
 
     ant2plt = 2*(ant%4)
     pylab.figure(ant)

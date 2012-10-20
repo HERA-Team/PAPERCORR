@@ -1,4 +1,4 @@
-some mcache keys:
+some redis keys:
 'pxi:adc_sum',
 'pxi:adc_sum_squares',
 'pxi:gbe_rx_cnt',

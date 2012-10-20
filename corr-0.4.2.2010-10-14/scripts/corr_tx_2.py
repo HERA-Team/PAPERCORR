@@ -120,7 +120,7 @@ class CorrTX:
         self.verbose=verbose
         self.x_per_fpga = x_per_fpga
         self.store_in_cache = store_in_cache
-        self.mcache = redis.Redis(name=ip)
+        self.redis = redis.Redis(name=ip)
         
         if self.store_in_cache:
             self.corr_read_missing = self.corr_read_missing_init(pid)
@@ -189,7 +189,7 @@ class CorrTX:
         print dict
         for key in dict.keys():
             try:
-                self.mcache.set(key, struct.pack(">" + "4s"*len(dict[key]), *dict[key]))
+                self.redis.set(key, struct.pack(">" + "4s"*len(dict[key]), *dict[key]))
             except Exception, e: print 'REDIS ERROR (set multi ints no pickel)',e
 
     def get_corr_read_missing(self,corr_read_dictionary = {}): 
@@ -228,7 +228,7 @@ class CorrTX:
         adc_mean = self.ant_levels_mean.read(mem_size)
         print 'saving adc data into redis'
         try:
-            self.mcache.set_multi({'px%d:adc_sum_squares'%(self.xeng[0]+1):adc, 'px%d:adc_sum'%(self.xeng[0]+1):adc_mean})
+            self.redis.set_multi({'px%d:adc_sum_squares'%(self.xeng[0]+1):adc, 'px%d:adc_sum'%(self.xeng[0]+1):adc_mean})
             print 'px%d:adc_sum_squares'%(self.xeng[0]+1)
             print 'done'
         except Exception, e: print 'REDIS ERROR (adc_amplitudes)',e
@@ -277,7 +277,7 @@ class CorrTX:
         print bram_dmp.keys()
         return bram_dmp 
         
-    def xaui_unpack(self,bram_dmp, hdr_index,pkt_len,skip_indices,mcache):
+    def xaui_unpack(self,bram_dmp, hdr_index,pkt_len,skip_indices,redis):
         pkt_64bit_hdr = struct.unpack('Q', bram_dmp['msb_data'][(4*hdr_index):(4*hdr_index)+4] + bram_dmp['lsb_data'][(4*hdr_index):(4*hdr_index+4)])[0] 
         pkt_mcnt = pkt_64bit_hdr >>16
         pkt_ant = pkt_64bit_hdr & 0xffff
@@ -291,7 +291,7 @@ class CorrTX:
             if len(raw_xaui_data) == 256:
                 print 'writing Ant%d, Chan%d into redis.'%(pkt_ant,pkt_freq)
                 try:
-                    mcache.set('px%d:snap_xaui_raw:%d:%d'%(self.xeng[0]+1,pkt_ant%4,pkt_freq), raw_xaui_data)
+                    redis.set('px%d:snap_xaui_raw:%d:%d'%(self.xeng[0]+1,pkt_ant%4,pkt_freq), raw_xaui_data)
                 except Exception, e: print 'REDIS ERROR(xaui unpack)',e
         return pkt_ant,pkt_freq
 
@@ -336,7 +336,7 @@ class CorrTX:
                     #if pkt_len-len(skip_indices) != 33:
                     #    pass
                     print 'unpacking data'
-                    ant,freq = self.xaui_unpack(bram_dmp,pkt_hdr_idx,self.pkt_len,skip_indices,self.mcache)
+                    ant,freq = self.xaui_unpack(bram_dmp,pkt_hdr_idx,self.pkt_len,skip_indices,self.redis)
                     self.freq_ant[freq].append(ant) 
             for k in self.freq_ant.keys():
                 if len(self.freq_ant[k]) == 4:
@@ -535,11 +535,11 @@ class CorrTX:
             n_integrations += 1
             if n_integrations == 1:
                 try:
-                    self.mcache.set('px%d:integration'%(self.xeng[0]+1),0)
+                    self.redis.set('px%d:integration'%(self.xeng[0]+1),0)
                 except Exception, e: print 'REDIS ERROR (set integration)', e
                 
                 
-            try:self.mcache.incr('px%d:integration'%(self.xeng[0]+1))
+            try:self.redis.incr('px%d:integration'%(self.xeng[0]+1))
             except Exception, e: print 'REDIS ERROR (integration increment)', e
 
 if __name__ == '__main__':

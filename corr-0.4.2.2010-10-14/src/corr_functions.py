@@ -112,7 +112,7 @@ class Correlator:
                     fails.append(self.servers[i] + ',')
             raise RuntimeError("Connection to %s failed."%''.join(fails))
         #At the moment we only have one server, which is our receive computer. Later we can add the servers to the conf file. 
-        self.mcache = redis.Redis(host=self.config['rx_udp_ip_str'])
+        self.redis = redis.Redis(host=self.config['rx_udp_ip_str'])
         self.addresses = {FENG_CTL_ADDR : 'ctrl', ANT_BASE_ADDR : 'antbase', INSEL_ADDR : 'insel', DELAY_ADDR : 'delay', SEED_ADDR : 'seed'}
 
         #self.speadstream = spead.SpeadStream(self.config['rx_udp_ip_str'],self.config['rx_udp_port'],"corr_n","A packetised correlator SPEAD stream.")
@@ -165,8 +165,8 @@ class Correlator:
 
     def write2cacheF(self,addr,value,xeng):
         """Writes to the memory cache daemon."""
-        if addr==ANT_BASE_ADDR:self.mcache.set('px%d:%s '%(xeng, self.addresses.get(addr)), str(value))
-        else:self.mcache.set('px%d:%s '%(xeng, self.addresses.get(addr)), '0x%08x' %value)
+        if addr==ANT_BASE_ADDR:self.redis.set('px%d:%s '%(xeng, self.addresses.get(addr)), str(value))
+        else:self.redis.set('px%d:%s '%(xeng, self.addresses.get(addr)), '0x%08x' %value)
 
 
     def vacc_resync(self):
@@ -866,7 +866,7 @@ class Correlator:
                 print 'Setting EQ at %i to %f'%(chan+start_addr,int(gain*32+0.5)/32.0)
             fpga.write_int('ibob_data%i'%(xaui),int(gain*32+0.5))
             fpga.write_int('ibob_addr%i'%(xaui),(chan+start_addr))
-            self.mcache.set('px%i:eq:%i:%i'%(fpga_n+1,(ant*2+pol_n)%8,chan),str(int(gain*32+0.5)/32.0))
+            self.redis.set('px%i:eq:%i:%i'%(fpga_n+1,(ant*2+pol_n)%8,chan),str(int(gain*32+0.5)/32.0))
 
     def issue_spead_metadata(self):
         """ Issues the SPEAD metadata packets containing the payload and options descriptors and unpack sequences."""

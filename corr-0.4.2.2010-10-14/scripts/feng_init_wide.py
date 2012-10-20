@@ -43,7 +43,7 @@ try:
     print 'Connecting...',
     p = corr.corr_functions.Correlator(args[0],lh)
     for s,server in enumerate(p.config['servers']): p.loggers[s].setLevel(10)
-    mcache = redis.Redis(host=p.config['rx_udp_ip_str'])
+    redis = redis.Redis(host=p.config['rx_udp_ip_str'])
     print 'done.'
 
     print p.config['servers']
@@ -96,7 +96,7 @@ try:
     print time.time()
     trig_time = numpy.ceil(time.time())
     print('Armed. Expect trigg at %s local.'%(time.strftime('%H:%M:%S',time.localtime(trig_time)))),
-    mcache.set('baobab_roachf_init_time', str(trig_time))        
+    redis.set('baobab_roachf_init_time', str(trig_time))        
     print ('done')
 
     #Set antennae base.
@@ -112,7 +112,7 @@ try:
     for i, f in enumerate(p.fpgas):
         f.write_int('fft_shift', p.config['fft_shift'])
         f.write_int('input_selector', 0x33333333)
-        #mcache.set('pf%d:fft_shift'%i, opts.fft_shift)
+        #redis.set('pf%d:fft_shift'%i, opts.fft_shift)
     print 'done.'
 
     #configure network stuff.
