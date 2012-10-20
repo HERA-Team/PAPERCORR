@@ -7,7 +7,7 @@ Grabs the contents of "snap_xaui" for analysis.
 
 #4/9/2011 - fixed antenna bug. Things seem to be working fine.
 
-import corr, time, numpy, pylab, struct, sys, logging, pylibmc
+import corr, time, numpy, pylab, struct, sys, logging, redis
 
 
 #brams
@@ -138,7 +138,7 @@ try:
     for s,server in enumerate(c.config['servers']): c.loggers[s].setLevel(10)
     print 'done.'
     
-    mcache = pylibmc.Client(['%s'%c.config['rx_udp_ip_str']])
+    mcache = redis.Redis(host='%s'%c.config['rx_udp_ip_str'])
 
     packet_len=c.config['10gbe_pkt_len']
     n_chans=c.config['n_chans']

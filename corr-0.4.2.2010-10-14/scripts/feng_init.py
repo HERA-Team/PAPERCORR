@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 import corr
-import pylibmc,time,struct,sys,os,numpy
+import redis,time,struct,sys,os,numpy
 
 
 def exit_fail():
@@ -43,7 +43,7 @@ try:
     print 'Connecting...',
     p = corr.corr_functions.Correlator(args[0],lh)
     for s,server in enumerate(p.config['servers']): p.loggers[s].setLevel(10)
-    mcache = pylibmc.Client(['localhost'])
+    mcache = redis.Redis(host=p.config['rx_udp_ip_str'])
     print 'done.'
 
 

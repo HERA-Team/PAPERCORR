@@ -30,7 +30,7 @@ old stuff:
 2007-08-29  JRM Changed some endian-ness handling for packet decoding
 """
 
-import time, os, socket, struct, sys, pylibmc
+import time, os, socket, struct, sys, redis
 
 #  ____                          _   _     ____            _        _   
 # / ___|__ _ ___ _ __   ___ _ __| \ | |   |  _ \ __ _  ___| | _____| |_ 
@@ -119,7 +119,7 @@ class CorrTX:
         self.payload_len=payload_len
         self.verbose=verbose
         self.x_per_fpga = x_per_fpga
-        self.mcache = pylibmc.Client([ip])
+        self.mcache = redis.Redis(host=ip)
 
         self.corr_read_missing = self.corr_read_missing_init(pid)
 

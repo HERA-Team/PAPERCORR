@@ -23,7 +23,7 @@ Revisions:\n
 \n
 
 """
-import corr, time, sys, numpy, os, logging, katcp, struct, pylibmc, construct
+import corr, time, sys, numpy, os, logging, katcp, struct, redis, construct
 
 FENG_CTL_ADDR = 8192
 ANT_BASE_ADDR = 8193
@@ -112,7 +112,7 @@ class Correlator:
                     fails.append(self.servers[i] + ',')
             raise RuntimeError("Connection to %s failed."%''.join(fails))
         #At the moment we only have one server, which is our receive computer. Later we can add the servers to the conf file. 
-        self.mcache = pylibmc.Client([self.config['rx_udp_ip_str']])
+        self.mcache = redis.Redis(host=self.config['rx_udp_ip_str'])
         self.addresses = {FENG_CTL_ADDR : 'ctrl', ANT_BASE_ADDR : 'antbase', INSEL_ADDR : 'insel', DELAY_ADDR : 'delay', SEED_ADDR : 'seed'}
 
         #self.speadstream = spead.SpeadStream(self.config['rx_udp_ip_str'],self.config['rx_udp_port'],"corr_n","A packetised correlator SPEAD stream.")
