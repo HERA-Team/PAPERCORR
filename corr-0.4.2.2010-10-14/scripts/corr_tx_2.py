@@ -202,7 +202,7 @@ class CorrTX:
                 corr_read_dictionary[key][i].seek(0)
                 corr_read_dictionary[key][i].flush()
                 corr_read2write['px%d:'%(self.xeng[0]+1)+key].append(corr_read_dictionary[key][i].read())
-        print 'Saving corr_read_missing registers to memcached'
+        print 'Saving corr_read_missing registers to redis'
         self.set_multi_ints_no_pickle(corr_read2write)     
         print 'done'
         
@@ -226,7 +226,7 @@ class CorrTX:
         self.ant_levels_mean.seek(0)
         self.ant_levels_mean.flush()
         adc_mean = self.ant_levels_mean.read(mem_size)
-        print 'saving adc data into memcache'
+        print 'saving adc data into redis'
         try:
             self.mcache.set_multi({'px%d:adc_sum_squares'%(self.xeng[0]+1):adc, 'px%d:adc_sum'%(self.xeng[0]+1):adc_mean})
             print 'px%d:adc_sum_squares'%(self.xeng[0]+1)
@@ -289,7 +289,7 @@ class CorrTX:
 
             raw_xaui_data += bram_dmp['msb_data'][(4*abs_index):(4*abs_index)+4]+bram_dmp['lsb_data'][(4*abs_index):(4*abs_index)+4]
             if len(raw_xaui_data) == 256:
-                print 'writing Ant%d, Chan%d into memcache.'%(pkt_ant,pkt_freq)
+                print 'writing Ant%d, Chan%d into redis.'%(pkt_ant,pkt_freq)
                 try:
                     mcache.set('px%d:snap_xaui_raw:%d:%d'%(self.xeng[0]+1,pkt_ant%4,pkt_freq), raw_xaui_data)
                 except Exception, e: print 'REDIS ERROR(xaui unpack)',e
@@ -469,7 +469,7 @@ class CorrTX:
         
         #t1 = time.time()
         #self.get_corr_read_missing(self.corr_read_missing)
-        #print 'time to get corr_read_missing data and save in memcached = ', time.time() - t1
+        #print 'time to get corr_read_missing data and save in redis = ', time.time() - t1
         freq_offset = 0
         self.pkt_len = 0
         while True:
@@ -563,7 +563,7 @@ if __name__ == '__main__':
     p.add_option('-n', '--n_xaui', dest='n_xaui', type=int, default=1,
         help='Number of xaui ports used per fpga.')
     p.add_option('-c', '--cache', dest='cacheit', action='store_true', default=False,
-        help='To store data in memcached or not. If not given, default is to no store anything in cache')
+        help='To store data in redis or not. If not given, default is to no store anything in cache')
     opts, args = p.parse_args(sys.argv[1:])
     if len(args) < 1: 
         print 'Please specify PID of Xengine BORPH process.'

@@ -60,12 +60,12 @@ def xaui_feng_unpack(xeng,xaui_port,bram_dump,hdr_index,pkt_len,skip_indices,mca
 
         pkt_64bit = struct.unpack('>Q',bram_dmp['bram_msb'][(4*abs_index):(4*abs_index)+4]+bram_dmp['bram_lsb'][(4*abs_index):(4*abs_index)+4])[0]
         raw_xaui_data = bram_dmp['bram_msb'][(4*abs_index):(4*abs_index)+4]+bram_dmp['bram_lsb'][(4*abs_index):(4*abs_index)+4]
-        #save raw data to memcached with the following format:
+        #save raw data to redis with the following format:
         #px?:snap_xaui_raw:antenna:channel = string of length 128 (each sample of a single channel ) * 1(change format to one byte instead of nibble) * 2(r,i) * 2(dual pol)
         if mcache.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq)) == None:
             mcache.set('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq), '')
         if len(mcache.get('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq))) == 256:
-            #print 'writing Ant%d, Chan%d into memcache.'%(pkt_ant,pkt_freq)
+            #print 'writing Ant%d, Chan%d into redis.'%(pkt_ant,pkt_freq)
             mcache.set('px%d:snap_xaui_raw:%d:%d'%(xeng+1,pkt_ant,pkt_freq), '')
             
    
