@@ -104,7 +104,7 @@ class CorrConf:
 
         gpuips = self.cp.get('correlator','gpu_ip').split(LISTDELIMIT)
         if len(gpuips) != len(self.config['servers']):
-            print 'Number of fengines and xengines does not match!'
+            print 'Number of fengines (servers) and xengines (gpu_ip) does not match!'
             self.config['gpu_ips'] = []
         else:
             self.config['gpu_ips'] = []
