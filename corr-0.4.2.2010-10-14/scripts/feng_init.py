@@ -120,10 +120,10 @@ try:
 
     #set fft shift and noise sources. make this command line optional eventually.
     #XXX
-    print ('Setting fft shift schedule, and noise sources'),
+    print ('Setting fft shift schedule and selecting ADC input source'),
     for i, f in enumerate(p.fpgas):
         f.write_int('fft_shift', p.config['fft_shift'])
-        f.write_int('input_selector', 0x33333333)
+        f.write_int('input_selector', 0)
         #redis.set('pf%d:fft_shift'%i, opts.fft_shift)
     print 'done.'
 
