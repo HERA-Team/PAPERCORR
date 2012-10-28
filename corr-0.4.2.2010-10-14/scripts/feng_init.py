@@ -143,7 +143,7 @@ try:
     #XXX make this option.
     print 'Configuring eq coeficients...',
     for fpga in p.fpgas:
-        coefficients = numpy.ones(1024, dtype=numpy.int32)*(opts.coeff<<7)#binary point at 7bits
+        coefficients = numpy.ones(2048, dtype=numpy.int32)*(opts.coeff<<7)#binary point at 7bits
         coeffsbe = coefficients.byteswap()
         cstr = coeffsbe.tostring()
         for ant in range(4):
