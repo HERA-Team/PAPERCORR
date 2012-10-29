@@ -254,6 +254,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     } else if (pkt_t > cb->cur_t) {
         // Case for locked on integration and rx in-range pkt w/ new time - time to read out an integration window.
         printf("Reading out window %d.\n", cb->rd_win);
+#ifdef PACKET_STATS
         printf("Packet count = %d (Total %d); X Engine Packet Counts:\n", packet_count, total_packet_count);
         printf("x0=%i", xids[0]);
         packet_count = 0;
@@ -263,6 +264,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
           xids[i] = 0;
         }
         printf("\n");
+#endif // PACKET_STATS
         for (pol=0; pol < cb->npol; pol++) {
           cp_id = pol;
           for (j=0; j < cb->nant; j++) {
