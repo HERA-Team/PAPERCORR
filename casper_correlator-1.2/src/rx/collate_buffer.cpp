@@ -214,7 +214,8 @@ void set_cb_callback(CollateBuffer *cb,
 // Put an incoming packet in the correct place in memory, and initiate
 // readout via a callback, which is passed cb->userdata
 int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
-    static int xids[8] = {0,0,0,0,0,0,0,0};
+    static int xids[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    static int total_packet_count = 0;
     static int packet_count = 0;
     static time_t ppt = 0;
 
@@ -253,6 +254,15 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     } else if (pkt_t > cb->cur_t) {
         // Case for locked on integration and rx in-range pkt w/ new time - time to read out an integration window.
         printf("Reading out window %d.\n", cb->rd_win);
+        printf("Packet count = %d (Total %d); X Engine Packet Counts:\n", packet_count, total_packet_count);
+        printf("x0=%i", xids[0]);
+        packet_count = 0;
+        xids[0]=0;
+        for(i=1; i< 16; i++) {
+          printf(", x%i=%i", i, xids[i]);
+          xids[i] = 0;
+        }
+        printf("\n");
         for (pol=0; pol < cb->npol; pol++) {
           cp_id = pol;
           for (j=0; j < cb->nant; j++) {
@@ -262,6 +272,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                 flags = (int *)malloc(cb->nchan * sizeof(int));
                 if (data == NULL || flags == NULL)
                     throw PacketError("Malloc error in collate_packet()");
+                //int flagsum=0;
                 for (ch=0; ch < cb->nchan; ch++) {
                     addr = ADDR((*cb),i,j,pol,ch,cb->rd_win);
                     //Scale data back to 4bit*4bit values, and correct for PAPER's reversed channel order.
@@ -279,6 +290,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                         data[2*((cb->nchan -1) - ch)  ] = PFLOAT(cb->buf)[addr  ] / cb->acc_len;
                         data[2*((cb->nchan -1) - ch)+1] = PFLOAT(cb->buf)[addr+1] / cb->acc_len;
                         flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
+                        //flagsum += cb->flagbuf[addr/2];
                         if (i==1 && j==1 && pol==0 && (ch<20))
                             fprintf(stdout," (%2i,%2i, pol %i,Ch:%4i): %8.4f + %8.4fj FLAG: %i\n",
                                 i,j,pol,ch,
@@ -294,6 +306,8 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                     // Clear out flags for this entry
                     cb->flagbuf[addr/2] = 1;
                 }
+                //if (i == j && pol==0)
+                //    fprintf(stdout," (%2i,%2i, pol %i): FLAGSUM: %i\n", i, j, pol, flagsum);
               
                 if (cb->sdisp) {
                  if (cb->sdisp_callback(cp_id, i,j,pol,cb->cur_t/ADC_RATE,data,flags,cb->nchan, cb->userdata)) {
@@ -314,8 +328,12 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
         printf("Advancing timelock to %ld, %s", cb->cur_t, ctime(&ppt));
     } // end if we're done reading out this timestamp
 
-    // When packet is accepted, reset the rejection counter
+    // When packet is accepted, reset the rejection counter, increment xid packet counter
     cb->n_reject = 0;
+    packet_count++;
+    total_packet_count++;
+    xids[pkt.instids.engine_id]++;
+
     ch_per_x = (cb->nchan / cb->nant) * X_PER_F;
     prev_cnt = pkt.heap_off / N_BYTES / 2;
     // Step through packet data and copy it into the CollateBuffer buffer
@@ -351,8 +369,8 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
             throw PacketError("Addr outside buffer space in collate_packet()");
 #if 0
         } else if (i==0 && j==0 && pol==0 && ch==0) {
-            fprintf(stderr, "i=%d, j=%d, pol=%d, chan=%d, win=%d, xid=%d\n",
-                i, j, pol, ch, cb->rd_win, pkt.instids.engine_id);
+            fprintf(stderr, "i=%d, j=%d, pol=%d, chan=%d, win=%d, xid=%d iid=%d\n",
+                i, j, pol, ch, cb->rd_win, pkt.instids.engine_id, pkt.instids.instrument_id);
 #endif
         }
         // Copy real and then imaginary part
@@ -368,8 +386,6 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
         }
         // Register that we got this data
         cb->flagbuf[addr/2] = 0;
-        xids[pkt.instids.engine_id]++;
-        packet_count++;
         //if (packet_count % 500000 == 0) printf("X Engine Packet Counts: 0:%i, 1:%i, 2:%i, 3:%i, 4:%i, 5:%i, 6:%i, 7:%i\n", xids[0], xids[1], xids[2], xids[3], xids[4], xids[5], xids[6], xids[7]);
         //if (pol == 0 && i == 0 && j == 0 && (ch > 509 && ch < 515)) {
         //    printf("Got packet: (xid=%d,pol=%d,i=%d,j=%d,ch=%d,addr=%d,real=%i,imag=%i)\n", pkt.instids.engine_id,pol, i, j, ch, addr, cb->buf[addr], cb->buf[addr+1]);
