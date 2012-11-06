@@ -1,5 +1,5 @@
 #!/usr/bin/python -u
-import casper_correlator,corr,ephem,aipy,numpy,sys,socket,time,struct,syslog
+import casper_correlator,corr,ephem,aipy,numpy,sys,socket,time,struct,syslog,signal
 
 syslog.openlog('cn_rx.py')
 
@@ -36,6 +36,15 @@ beam = aipy.phs.Beam(freqs)
 ants = [aipy.phs.Antenna(a[0],a[1],a[2],beam) for a in ants]
 aa = aipy.phs.AntennaArray(ants=ants, location=location)
 sdisp_destination_ip = "127.0.0.1"
+rx=None
+
+# Function to handle SIGINT
+def stop_taking_data(*args):
+    global rx
+    if rx is not None:
+      print 'stopping cn_rx.py'
+      rx.stop()
+    exit(0)
 
 print "Sending signal display data to",sdisp_destination_ip
 
@@ -49,6 +58,8 @@ try:
                 sdisp=1, sdisp_destination_ip=sdisp_destination_ip,
                 acc_len=acc_len)
     rx.start(port)
+
+    signal.signal(signal.SIGINT, stop_taking_data)
     
     time.sleep(5)
 
@@ -70,4 +81,4 @@ try:
       time.sleep(10)
 
 except(KeyboardInterrupt):
-    rx.stop()
+    stop_taking_data()
