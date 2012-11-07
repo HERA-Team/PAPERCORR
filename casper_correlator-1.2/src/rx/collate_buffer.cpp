@@ -310,16 +310,22 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                 }
                 //if (i == j && pol==0)
                 //    fprintf(stdout," (%2i,%2i, pol %i): FLAGSUM: %i\n", i, j, pol, flagsum);
-              
-                if (cb->sdisp) {
-                 if (cb->sdisp_callback(cp_id, i,j,pol,cb->cur_t/ADC_RATE,data,flags,cb->nchan, cb->userdata)) {
-                  printf("Failed to exec sdisp callback.\n"); return 1; }
+
+                if (cb->sdisp)
+                {
+                  if (cb->sdisp_callback(cp_id, i,j,pol,cb->cur_t/ADC_RATE,data,flags,cb->nchan, cb->userdata))
+                  {
+                    printf("Failed to exec sdisp callback.\n"); return 1;
+                  }
                 }
-            
-                //if (cb->callback(i,j,pol,double(cb->cur_t)/ADC_RATE, data,flags,cb->nchan, cb->userdata)) {
-                if (cb->callback(i,j,pol,cb->cur_t, data,flags,cb->nchan, cb->userdata)) {
-                printf("CollateBuffer bailed on callback.\n"); return 1; }
-            
+
+                //if (cb->callback(i,j,pol,double(cb->cur_t)/ADC_RATE, data,flags,cb->nchan, cb->userdata))
+                if (cb->callback(i,j,pol,cb->cur_t, data,flags,cb->nchan, cb->userdata))
+                {
+                  printf("CollateBuffer bailed on callback.\n");
+                  return 1;
+                }
+
             cp_id+=4;
             } // end of for i <= j
           }
