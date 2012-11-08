@@ -187,7 +187,7 @@ socket_t setup_network_listener(short port) {
             (void *)&on, sizeof(on)) == -1) return -1;
 
     // Increase recv buffer for this sock
-    int bufsize = 64*1024*1024; // 64 MB
+    int bufsize = 128*1024*1024; // 128 MB
     socklen_t ss = sizeof(int);
     int rv = setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &bufsize, ss);
     if (rv<0) {
