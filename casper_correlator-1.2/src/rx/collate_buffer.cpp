@@ -111,6 +111,7 @@ void init_collate_buffer(CollateBuffer *cb, int nant, int nants_per_feng, int nc
     if (cb->xeng_aj_order == NULL)
         throw PacketError("Malloc error in init_collate_buffer()");
     cb->nchan = nchan;
+    cb->nchan_per_x = nchan / (nant / nants_per_feng);
     cb->xeng_chan_mode = xeng_chan_mode;
     cb->npol = npol;
     cb->nwin = nwin;
@@ -285,7 +286,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                         data[2*((cb->nchan -1) - ch)+1] = (float) cb->buf[addr+1] / cb->acc_len;
                         flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
                         if (i==1 && j==1 && pol==0 && (ch<20))
-                            fprintf(stdout," (%2i,%2i, pol %i,Ch:%4i): %8i + %8ij FLAG: %i\n",
+                            fprintf(stdout," (%2i, %2i, pol %i, chan %4i): %8i + %8ij FLAG: %i\n",
                                 i,j,pol,ch, cb->buf[addr],cb->buf[addr+1],cb->flagbuf[addr/2]);
                     } else {
                         // Cast buf to float pointer and divide by acc_len
@@ -293,8 +294,8 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                         data[2*((cb->nchan -1) - ch)+1] = PFLOAT(cb->buf)[addr+1] / cb->acc_len;
                         flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
                         //flagsum += cb->flagbuf[addr/2];
-                        if (i==1 && j==1 && pol==0 && (ch<20))
-                            fprintf(stdout," (%2i,%2i, pol %i,Ch:%4i): %8.4f + %8.4fj FLAG: %i\n",
+                        if (i==1 && j==1 && pol==0 && (ch % cb->nchan_per_x == 0))
+                            fprintf(stdout," (%2i, %2i, pol %i, chan %4i): (%+.4e, %+.4ej) FLAG: %i\n",
                                 i,j,pol,ch,
                                 PFLOAT(cb->buf)[addr],
                                 PFLOAT(cb->buf)[addr+1],
@@ -307,7 +308,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
 
                     // Clear out flags for this entry
                     cb->flagbuf[addr/2] = 1;
-                }
+                } // end of for each channel
                 //if (i == j && pol==0)
                 //    fprintf(stdout," (%2i,%2i, pol %i): FLAGSUM: %i\n", i, j, pol, flagsum);
 
@@ -328,12 +329,12 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
 
             cp_id+=4;
             } // end of for i <= j
-          }
-        }
+          }  // end of for j...
+        } // end of for pol...
         cb->rd_win = (cb->rd_win + 1) % cb->nwin;
         ppt = pkt_ts;
         cb->cur_t=pkt_t;
-        printf("Advancing timelock to %ld, %s", cb->cur_t, ctime(&ppt));
+        printf("Advance timelock to %ld, %s", cb->cur_t, ctime(&ppt));
     } // end if we're done reading out this timestamp
 
     // When packet is accepted, reset the rejection counter, increment xid packet counter
