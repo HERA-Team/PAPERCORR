@@ -577,6 +577,7 @@ int bs_collatebuffer_callback(char *data, size_t size, void *userdata) {
     }
     if (pkt.sync_time > 0) {
      cb->sync_time = pkt.sync_time;
+     printf("Got sync_time packet\n");
      return 0;
     } 
     //printf("packet accepted: pkt->heap_off=%ld\n", pkt.heap_off);

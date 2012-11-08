@@ -122,8 +122,10 @@ void init_collate_buffer(CollateBuffer *cb, int nant, int nants_per_feng, int nc
     cb->acc_len = acc_len;
     cb->intsamps = (int64_t)nchan * acc_len;
     cb->sync_time = 0;
+    printf("Waiting for sync_time packet\n");
     cb->buflen = 2 * cb->nbl * nchan * npol * nwin;
     cb->cur_t = NOTIME;
+    cb->n_skip_dumps = 1; // Skip the first dump
     set_cb_callback(cb, &default_callback);
     if (sdisp) set_cb_sdisp_callback(cb, &sdisp_callback);
     cb->userdata = NULL;
@@ -234,6 +236,11 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     float *data = cb->visdata;
     int *flags = cb->visflags;
 
+    // Ignore data packets until sync_time is set
+    if(cb->sync_time == 0) {
+      return 0;
+    }
+
     //printf("Got a packet to collate!");
     // Determine whether to accept this packet
     pkt_t = cb->sync_time*ADC_RATE  + (uint64_t)(pkt.timestamp * TIME_SCALE); //pkt_t is in ADC samples since unix epoch
@@ -248,6 +255,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
         printf("Setting timelock to %ld, %s", cb->cur_t,ctime(&pkt_ts));
         cb->rd_win = 0;
         cb->n_reject = 0;
+        cb->n_skip_dumps = 1;
     } else if (pkt_t <= cb->cur_t - cb->nwin*cb->intsamps || pkt_t > cb->cur_t + cb->nwin*cb->intsamps) {
         // Case for locked on integration and rx out-of-range pkt
         printf("Rejecting packet with timestamp %ld.\n", pkt_t);
@@ -260,98 +268,102 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
         }
         return 0;
     } else if (pkt_t > cb->cur_t) {
-        // Case for locked on integration and rx in-range pkt w/ new time - time to read out an integration window.
-        printf("Reading out window %d.\n", cb->rd_win);
+        if(cb->n_skip_dumps > 0) {
+          cb->n_skip_dumps--;
+        } else {
+          // Case for locked on integration and rx in-range pkt w/ new time - time to read out an integration window.
+          printf("Reading out window %d.\n", cb->rd_win);
 #ifdef PACKET_STATS
-        printf("Packet count = %d (Total %d); X Engine Packet Counts:\n", packet_count, total_packet_count);
-        printf("x0=%i", xids[0]);
-        packet_count = 0;
-        xids[0]=0;
-        for(i=1; i< 16; i++) {
-          printf(", x%i=%i", i, xids[i]);
-          xids[i] = 0;
-        }
-        printf("\n");
+          printf("Packet count = %d (Total %d); X Engine Packet Counts:\n", packet_count, total_packet_count);
+          printf("x0=%i", xids[0]);
+          packet_count = 0;
+          xids[0]=0;
+          for(i=1; i< 16; i++) {
+            printf(", x%i=%i", i, xids[i]);
+            xids[i] = 0;
+          }
+          printf("\n");
 #endif // PACKET_STATS
-        // Zero out flagsums
-        for (i=0; i < cb->nchan_per_x; i++) {
-          cb->flagsums[i] = 0;
-        }
-        for (pol=0; pol < cb->npol; pol++) {
-          cp_id = pol;
-          for (j=0; j < cb->nant; j++) {
-            for (i=0; i <= j; i++) {
-                for (ch=0; ch < cb->nchan; ch++) {
-                    addr = ADDR((*cb),i,j,pol,ch,cb->rd_win);
-                    //Scale data back to 4bit*4bit values, and correct for PAPER's reversed channel order.
-                    // Assume current packet's instrument_id matches previous packets' instrument_ids.
-                    if(pkt.instids.instrument_id == INSTRUMENT_ID_PAPER_FPGA_X_ENGINE) {
-                        // Cast buf's ints to floats and divide by acc_len
-                        data[2*((cb->nchan -1) - ch)  ] = (float) cb->buf[addr  ] / cb->acc_len;
-                        data[2*((cb->nchan -1) - ch)+1] = (float) cb->buf[addr+1] / cb->acc_len;
-                        flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
-                        // X engine channels are interleaved
-                        xidx = ch % (cb->nchan / cb->nchan_per_x);
-                        if (i==1 && j==1 && pol==0 && (ch<20))
-                            fprintf(stdout," (%2i, %2i, pol %i, chan %4i): %8i + %8ij FLAG: %i\n",
-                                i,j,pol,ch, cb->buf[addr],cb->buf[addr+1],cb->flagbuf[addr/2]);
-                    } else {
-                        // Cast buf to float pointer and divide by acc_len
-                        data[2*((cb->nchan -1) - ch)  ] = PFLOAT(cb->buf)[addr  ] / cb->acc_len;
-                        data[2*((cb->nchan -1) - ch)+1] = PFLOAT(cb->buf)[addr+1] / cb->acc_len;
-                        flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
-                        // X engine channels are contiguous
-                        xidx = ch / cb->nchan_per_x;
-                        if (i==1 && j==1 && pol==0 && (ch % cb->nchan_per_x == 0))
-                            fprintf(stdout," (%2i, %2i, pol %i, chan %4i): (%+.4e, %+.4ej) FLAG: %i\n",
-                                i,j,pol,ch,
-                                PFLOAT(cb->buf)[addr],
-                                PFLOAT(cb->buf)[addr+1],
-                                cb->flagbuf[addr/2]);
-                    }
-                    cb->flagsums[xidx] += cb->flagbuf[addr/2];
-                    //if (i ==0 && j == 0 && pol == 0 && ch > 500 && ch < 520) fprintf(stderr,"0x: Scaled Window Ch:%i, D1: %f, D2: %f\n", ch, data[2*ch], data[2*ch+1]);
-                    //if (i <= 3 && j <= 3 && ch == 1 && (pol==0 || pol==1)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch, ((int32_t *)(pkt.data + cnt))[0], ((int32_t *)(pkt.data + cnt))[1]);
-                    //if (i <= 3 && j <= 3 && ch > 500 && ch<520 && (pol==0 || pol==1)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch, ((int32_t *)(pkt.data + cnt))[0], ((int32_t *)(pkt.data + cnt))[1]);
-                    //if ((cb->buf[addr] >0) || (cb->buf[addr+1]>0)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch,(cb->buf[addr] >0),(cb->buf[addr+1] >0));
+          // Zero out flagsums
+          for (i=0; i < cb->nchan_per_x; i++) {
+            cb->flagsums[i] = 0;
+          }
+          for (pol=0; pol < cb->npol; pol++) {
+            cp_id = pol;
+            for (j=0; j < cb->nant; j++) {
+              for (i=0; i <= j; i++) {
+                  for (ch=0; ch < cb->nchan; ch++) {
+                      addr = ADDR((*cb),i,j,pol,ch,cb->rd_win);
+                      //Scale data back to 4bit*4bit values, and correct for PAPER's reversed channel order.
+                      // Assume current packet's instrument_id matches previous packets' instrument_ids.
+                      if(pkt.instids.instrument_id == INSTRUMENT_ID_PAPER_FPGA_X_ENGINE) {
+                          // Cast buf's ints to floats and divide by acc_len
+                          data[2*((cb->nchan -1) - ch)  ] = (float) cb->buf[addr  ] / cb->acc_len;
+                          data[2*((cb->nchan -1) - ch)+1] = (float) cb->buf[addr+1] / cb->acc_len;
+                          flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
+                          // X engine channels are interleaved
+                          xidx = ch % (cb->nchan / cb->nchan_per_x);
+                          if (i==1 && j==1 && pol==0 && (ch<20))
+                              fprintf(stdout," (%2i, %2i, pol %i, chan %4i): %8i + %8ij FLAG: %i\n",
+                                  i,j,pol,ch, cb->buf[addr],cb->buf[addr+1],cb->flagbuf[addr/2]);
+                      } else {
+                          // Cast buf to float pointer and divide by acc_len
+                          data[2*((cb->nchan -1) - ch)  ] = PFLOAT(cb->buf)[addr  ] / cb->acc_len;
+                          data[2*((cb->nchan -1) - ch)+1] = PFLOAT(cb->buf)[addr+1] / cb->acc_len;
+                          flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
+                          // X engine channels are contiguous
+                          xidx = ch / cb->nchan_per_x;
+                          if (i==1 && j==1 && pol==0 && (ch % cb->nchan_per_x == 0))
+                              fprintf(stdout," (%2i, %2i, pol %i, chan %4i): (%+.4e, %+.4ej) FLAG: %i\n",
+                                  i,j,pol,ch,
+                                  PFLOAT(cb->buf)[addr],
+                                  PFLOAT(cb->buf)[addr+1],
+                                  cb->flagbuf[addr/2]);
+                      }
+                      cb->flagsums[xidx] += cb->flagbuf[addr/2];
+                      //if (i ==0 && j == 0 && pol == 0 && ch > 500 && ch < 520) fprintf(stderr,"0x: Scaled Window Ch:%i, D1: %f, D2: %f\n", ch, data[2*ch], data[2*ch+1]);
+                      //if (i <= 3 && j <= 3 && ch == 1 && (pol==0 || pol==1)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch, ((int32_t *)(pkt.data + cnt))[0], ((int32_t *)(pkt.data + cnt))[1]);
+                      //if (i <= 3 && j <= 3 && ch > 500 && ch<520 && (pol==0 || pol==1)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch, ((int32_t *)(pkt.data + cnt))[0], ((int32_t *)(pkt.data + cnt))[1]);
+                      //if ((cb->buf[addr] >0) || (cb->buf[addr+1]>0)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch,(cb->buf[addr] >0),(cb->buf[addr+1] >0));
 
-                    // Clear out flags for this entry
-                    cb->flagbuf[addr/2] = 1;
-                } // end of for each channel
-                //if (i == j && pol==0)
-                //    fprintf(stdout," (%2i,%2i, pol %i): FLAGSUM: %i\n", i, j, pol, flagsum);
+                      // Clear out flags for this entry
+                      cb->flagbuf[addr/2] = 1;
+                  } // end of for each channel
+                  //if (i == j && pol==0)
+                  //    fprintf(stdout," (%2i,%2i, pol %i): FLAGSUM: %i\n", i, j, pol, flagsum);
 
-                if (cb->sdisp)
-                {
-                  if (cb->sdisp_callback(cp_id, i,j,pol,cb->cur_t/ADC_RATE,data,flags,cb->nchan, cb->userdata))
+                  if (cb->sdisp)
                   {
-                    printf("Failed to exec sdisp callback.\n"); return 1;
+                    if (cb->sdisp_callback(cp_id, i,j,pol,cb->cur_t/ADC_RATE,data,flags,cb->nchan, cb->userdata))
+                    {
+                      printf("Failed to exec sdisp callback.\n"); return 1;
+                    }
                   }
-                }
 
-                //if (cb->callback(i,j,pol,double(cb->cur_t)/ADC_RATE, data,flags,cb->nchan, cb->userdata))
-                if (cb->callback(i,j,pol,cb->cur_t, data,flags,cb->nchan, cb->userdata))
-                {
-                  printf("CollateBuffer bailed on callback.\n");
-                  return 1;
-                }
+                  //if (cb->callback(i,j,pol,double(cb->cur_t)/ADC_RATE, data,flags,cb->nchan, cb->userdata))
+                  if (cb->callback(i,j,pol,cb->cur_t, data,flags,cb->nchan, cb->userdata))
+                  {
+                    printf("CollateBuffer bailed on callback.\n");
+                    return 1;
+                  }
 
-            cp_id+=4;
-            } // end of for i <= j
-          }  // end of for j...
-        } // end of for pol...
+                  cp_id+=4;
+              } // end of for i <= j
+            }  // end of for j...
+          } // end of for pol...
 
-        // Print out flag sums
-        int total_flagsum = 0;
-        for (i=0; i < cb->nchan_per_x; i++) {
-          total_flagsum += cb->flagsums[i];
-        }
-        ppt = cb->cur_t / ADC_RATE;
-        //if(total_flagsum == 0) {
-        //  printf("All data received for %s\n", ctime(&ppt));
-        //} else {
-          printf("Flagged %d baseline-channels for %s\n", total_flagsum, ctime(&ppt));
-        //}
+          // Print out flag sums
+          int total_flagsum = 0;
+          for (i=0; i < cb->nchan_per_x; i++) {
+            total_flagsum += cb->flagsums[i];
+          }
+          ppt = cb->cur_t / ADC_RATE;
+          //if(total_flagsum == 0) {
+          //  printf("All data received for %s\n", ctime(&ppt));
+          //} else {
+            printf("Flagged %d baseline-channels for %s\n", total_flagsum, ctime(&ppt));
+          //}
+        } // end if cb->n_skip_dumps...
 
         cb->rd_win = (cb->rd_win + 1) % cb->nwin;
         ppt = pkt_ts;

@@ -52,6 +52,7 @@ typedef struct {
     int64_t cur_t; // Change from uint64_t to int64_t is intentional (why?)
     int rd_win;
     int n_reject;
+    int n_skip_dumps;
     int is_gpu; // 0 for FPGA X engine, 1 for GPU X engine
     int (*callback)(int,int,int,int64_t,float *,int *, int, void *);
     int (*sdisp_callback)(int, int,int,int,int64_t,float *,int *, int, void *);
