@@ -112,6 +112,9 @@ void init_collate_buffer(CollateBuffer *cb, int nant, int nants_per_feng, int nc
         throw PacketError("Malloc error in init_collate_buffer()");
     cb->nchan = nchan;
     cb->nchan_per_x = nchan / (nant / nants_per_feng);
+    cb->flagsums = (int *)malloc(cb->nchan_per_x * sizeof(int));
+    if (cb->flagsums == NULL)
+        throw PacketError("Malloc error in init_collate_buffer()");
     cb->xeng_chan_mode = xeng_chan_mode;
     cb->npol = npol;
     cb->nwin = nwin;
@@ -195,6 +198,7 @@ void free_collate_buffer(CollateBuffer cb) {
     free(cb.xeng_aj_order);
     free(cb.buf);
     free(cb.flagbuf);
+    free(cb.flagsums);
 }
 
 void set_cb_sdisp_callback(CollateBuffer *cb,
@@ -224,7 +228,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     int bl, pol, ch;
     int64_t cnt, pkt_t, pkt_ts;
     int addr;
-    int i, j, cp_id;
+    int i, j, xidx, cp_id;
     float *data=NULL;
     int *flags=NULL;
     //printf("Got a packet to collate!");
@@ -266,6 +270,10 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
         }
         printf("\n");
 #endif // PACKET_STATS
+        // Zero out flagsums
+        for (i=0; i < cb->nchan_per_x; i++) {
+          cb->flagsums[i] = 0;
+        }
         for (pol=0; pol < cb->npol; pol++) {
           cp_id = pol;
           for (j=0; j < cb->nant; j++) {
@@ -275,7 +283,6 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                 flags = (int *)malloc(cb->nchan * sizeof(int));
                 if (data == NULL || flags == NULL)
                     throw PacketError("Malloc error in collate_packet()");
-                //int flagsum=0;
                 for (ch=0; ch < cb->nchan; ch++) {
                     addr = ADDR((*cb),i,j,pol,ch,cb->rd_win);
                     //Scale data back to 4bit*4bit values, and correct for PAPER's reversed channel order.
@@ -285,6 +292,8 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                         data[2*((cb->nchan -1) - ch)  ] = (float) cb->buf[addr  ] / cb->acc_len;
                         data[2*((cb->nchan -1) - ch)+1] = (float) cb->buf[addr+1] / cb->acc_len;
                         flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
+                        // X engine channels are interleaved
+                        xidx = ch % (cb->nchan / cb->nchan_per_x);
                         if (i==1 && j==1 && pol==0 && (ch<20))
                             fprintf(stdout," (%2i, %2i, pol %i, chan %4i): %8i + %8ij FLAG: %i\n",
                                 i,j,pol,ch, cb->buf[addr],cb->buf[addr+1],cb->flagbuf[addr/2]);
@@ -293,7 +302,8 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                         data[2*((cb->nchan -1) - ch)  ] = PFLOAT(cb->buf)[addr  ] / cb->acc_len;
                         data[2*((cb->nchan -1) - ch)+1] = PFLOAT(cb->buf)[addr+1] / cb->acc_len;
                         flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
-                        //flagsum += cb->flagbuf[addr/2];
+                        // X engine channels are contiguous
+                        xidx = ch / cb->nchan_per_x;
                         if (i==1 && j==1 && pol==0 && (ch % cb->nchan_per_x == 0))
                             fprintf(stdout," (%2i, %2i, pol %i, chan %4i): (%+.4e, %+.4ej) FLAG: %i\n",
                                 i,j,pol,ch,
@@ -301,6 +311,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                                 PFLOAT(cb->buf)[addr+1],
                                 cb->flagbuf[addr/2]);
                     }
+                    cb->flagsums[xidx] += cb->flagbuf[addr/2];
                     //if (i ==0 && j == 0 && pol == 0 && ch > 500 && ch < 520) fprintf(stderr,"0x: Scaled Window Ch:%i, D1: %f, D2: %f\n", ch, data[2*ch], data[2*ch+1]);
                     //if (i <= 3 && j <= 3 && ch == 1 && (pol==0 || pol==1)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch, ((int32_t *)(pkt.data + cnt))[0], ((int32_t *)(pkt.data + cnt))[1]);
                     //if (i <= 3 && j <= 3 && ch > 500 && ch<520 && (pol==0 || pol==1)) fprintf(stderr," (%i,%i, pol %i,Ch:%i) D1: %i, D2: %i\n", i,j,pol,ch, ((int32_t *)(pkt.data + cnt))[0], ((int32_t *)(pkt.data + cnt))[1]);
@@ -331,6 +342,19 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
             } // end of for i <= j
           }  // end of for j...
         } // end of for pol...
+
+        // Print out flag sums
+        int total_flagsum = 0;
+        for (i=0; i < cb->nchan_per_x; i++) {
+          total_flagsum += cb->flagsums[i];
+        }
+        ppt = cb->cur_t / ADC_RATE;
+        //if(total_flagsum == 0) {
+        //  printf("All data received for %s\n", ctime(&ppt));
+        //} else {
+          printf("Flagged %d baseline-channels for %s\n", total_flagsum, ctime(&ppt));
+        //}
+
         cb->rd_win = (cb->rd_win + 1) % cb->nwin;
         ppt = pkt_ts;
         cb->cur_t=pkt_t;

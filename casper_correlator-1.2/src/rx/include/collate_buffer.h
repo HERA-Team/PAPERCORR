@@ -38,6 +38,7 @@ typedef struct {
     int nants_per_feng;
     int nbl;
     int nchan;
+    int *flagsums;  // Buffer to hold per-X-engine flag sums for each dump
     int nchan_per_x; // Number of channels per X egnine
     int xeng_chan_mode;
     int npol;
