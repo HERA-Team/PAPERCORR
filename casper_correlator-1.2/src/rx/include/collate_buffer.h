@@ -38,6 +38,8 @@ typedef struct {
     int nants_per_feng;
     int nbl;
     int nchan;
+    float *visdata; // Buffer to hold MIRIAD-ordered floating point visibility data
+    int *visflags;  // Buffer to hold MIRIAD flag array
     int *flagsums;  // Buffer to hold per-X-engine flag sums for each dump
     int nchan_per_x; // Number of channels per X egnine
     int xeng_chan_mode;

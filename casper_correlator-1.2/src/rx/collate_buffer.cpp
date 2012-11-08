@@ -8,12 +8,11 @@ static struct sockaddr_in base_addr = {0};
 static struct sockaddr_in listener_addr = {0};
 static int sock = -1;
 
-// A callback receives per-baseline spectra and metadata
-// "data" and "flags" are pointers to buffers of length 2*nchan and nchan,
-// respectively, that have been
-// malloc'd just for this purpose.  The callback assumes responsibility for
-// freeing these buffers when finished.  Failure to do so opens a major
-// memory leak!
+// A callback receives per-baseline spectra and metadata "data" and "flags" are
+// pointers to buffers of length 2*nchan and nchan, respectively.  The callback
+// should NOT free these buffers.  These buffers are reused for multiple
+// callbacks.  If the callback wants to retain the data passed to it, it much
+// allocate and manage its own storage space and copy the data there.
 int default_callback(int ai, int aj, int pol, int64_t t,
         float *data, int *flags, int nchan, void *userdata) {
     int i, nflagged=0;
@@ -22,7 +21,6 @@ int default_callback(int ai, int aj, int pol, int64_t t,
     }
     printf("    (%d,%d),pol=%d,time=%ld: %d/%d channels flagged in default callback\n", 
         ai, aj, pol, t, nflagged, nchan);
-    free(data); free(flags);
     return 0;
 }
 
@@ -112,8 +110,10 @@ void init_collate_buffer(CollateBuffer *cb, int nant, int nants_per_feng, int nc
         throw PacketError("Malloc error in init_collate_buffer()");
     cb->nchan = nchan;
     cb->nchan_per_x = nchan / (nant / nants_per_feng);
+    cb->visdata = (float *)malloc(2*nchan * sizeof(float));
+    cb->visflags = (int *)malloc(nchan * sizeof(int));
     cb->flagsums = (int *)malloc(cb->nchan_per_x * sizeof(int));
-    if (cb->flagsums == NULL)
+    if (cb->visdata == NULL || cb->visflags == NULL || cb->flagsums == NULL)
         throw PacketError("Malloc error in init_collate_buffer()");
     cb->xeng_chan_mode = xeng_chan_mode;
     cb->npol = npol;
@@ -198,6 +198,8 @@ void free_collate_buffer(CollateBuffer cb) {
     free(cb.xeng_aj_order);
     free(cb.buf);
     free(cb.flagbuf);
+    free(cb.visdata);
+    free(cb.visflags);
     free(cb.flagsums);
 }
 
@@ -229,8 +231,9 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     int64_t cnt, pkt_t, pkt_ts;
     int addr;
     int i, j, xidx, cp_id;
-    float *data=NULL;
-    int *flags=NULL;
+    float *data = cb->visdata;
+    int *flags = cb->visflags;
+
     //printf("Got a packet to collate!");
     // Determine whether to accept this packet
     pkt_t = cb->sync_time*ADC_RATE  + (uint64_t)(pkt.timestamp * TIME_SCALE); //pkt_t is in ADC samples since unix epoch
@@ -278,11 +281,6 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
           cp_id = pol;
           for (j=0; j < cb->nant; j++) {
             for (i=0; i <= j; i++) {
-                // Dynamically allocate spectrum buffers
-                data = (float *)malloc(2*cb->nchan * sizeof(float));
-                flags = (int *)malloc(cb->nchan * sizeof(int));
-                if (data == NULL || flags == NULL)
-                    throw PacketError("Malloc error in collate_packet()");
                 for (ch=0; ch < cb->nchan; ch++) {
                     addr = ADDR((*cb),i,j,pol,ch,cb->rd_win);
                     //Scale data back to 4bit*4bit values, and correct for PAPER's reversed channel order.

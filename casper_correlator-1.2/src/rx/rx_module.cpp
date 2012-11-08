@@ -385,10 +385,10 @@ int wrap_cb_pycallback(int i, int j, int pol, int64_t t,
             NPY_CFLOAT, data);
     nflags = (PyArrayObject *) PyArray_SimpleNewFromData(1, npy_dims, 
             NPY_INT, flags);
-    ndata->flags |= NPY_OWNDATA;
-    nflags->flags |= NPY_OWNDATA;
-    // data/flags now embedded in ndata/nflags and will be freed
-    // when these objects are deleted.
+    // data/flags now embedded in ndata/nflags, but will NOT be freed when
+    // these objects are deleted.  Underlying data may/will change and/or be
+    // freed after the callback completes.  Callbacks wishing to hold onto data
+    // must duplicate it themselves (but that is not a typical use case).
     arglist = Py_BuildValue("(iiilOO)", i, j, pol, t, 
             PyArray_Return(ndata), PyArray_Return(nflags));
     Py_DECREF(ndata); Py_DECREF(nflags);
