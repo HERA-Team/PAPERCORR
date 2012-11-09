@@ -308,8 +308,9 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                                   i,j,pol,ch, cb->buf[addr],cb->buf[addr+1],cb->flagbuf[addr/2]);
                       } else {
                           // Cast buf to float pointer and divide by acc_len
-                          data[2*((cb->nchan -1) - ch)  ] = PFLOAT(cb->buf)[addr  ] / cb->acc_len;
-                          data[2*((cb->nchan -1) - ch)+1] = PFLOAT(cb->buf)[addr+1] / cb->acc_len;
+                          // and 256 (to account for scaling in GPU X engine)
+                          data[2*((cb->nchan -1) - ch)  ] = PFLOAT(cb->buf)[addr  ] / cb->acc_len / 256;
+                          data[2*((cb->nchan -1) - ch)+1] = PFLOAT(cb->buf)[addr+1] / cb->acc_len / 256;
                           flags[((cb->nchan -1) - ch)] = cb->flagbuf[addr/2];
                           // X engine channels are contiguous
                           xidx = ch / cb->nchan_per_x;
