@@ -315,11 +315,11 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                           // X engine channels are contiguous
                           xidx = ch / cb->nchan_per_x;
                           if (i==1 && j==1 && pol==0 && (ch % cb->nchan_per_x == 0))
-                              fprintf(stdout," (%2i, %2i, pol %i, chan %4i): (%+.4e, %+.4ej) FLAG: %i\n",
+                              fprintf(stdout," (%2i, %2i, pol %i, chan %4i): (%+7.3f, %+7.3fj) FLAG: %i\n",
                                   i,j,pol,ch,
-                                  PFLOAT(cb->buf)[addr],
-                                  PFLOAT(cb->buf)[addr+1],
-                                  cb->flagbuf[addr/2]);
+                                  data[2*((cb->nchan -1) - ch)  ],
+                                  data[2*((cb->nchan -1) - ch)+1],
+                                  flags[((cb->nchan -1) - ch)]);
                       }
                       cb->flagsums[xidx] += cb->flagbuf[addr/2];
                       //if (i ==0 && j == 0 && pol == 0 && ch > 500 && ch < 520) fprintf(stderr,"0x: Scaled Window Ch:%i, D1: %f, D2: %f\n", ch, data[2*ch], data[2*ch+1]);
