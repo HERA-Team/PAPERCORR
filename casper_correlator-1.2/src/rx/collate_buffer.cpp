@@ -1,3 +1,4 @@
+#include <syslog.h>
 #include "include/corr_packet.h"
 #include "include/collate_buffer.h"
 #include "include/sdisp.h"
@@ -226,6 +227,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     static int xids[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     static int total_packet_count = 0;
     static int packet_count = 0;
+    static int flagsum_errors = 0;
     static time_t ppt = 0;
 
     int prev_cnt, nvals, ch_per_x;
@@ -359,11 +361,18 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
             total_flagsum += cb->flagsums[i];
           }
           ppt = cb->cur_t / ADC_RATE;
-          //if(total_flagsum == 0) {
-          //  printf("All data received for %s\n", ctime(&ppt));
-          //} else {
-            printf("Flagged %d baseline-channels for %s\n", total_flagsum, ctime(&ppt));
-          //}
+          printf("Flagged %d baseline-channels for %s", total_flagsum, ctime(&ppt));
+          if(total_flagsum == 0) {
+            // Reset flagsum_errors counter so next non-zero flagsum will get logged
+            flagsum_errors = 0;
+          } else {
+            // Only log every 600th continuous flagsum error to syslog.  For a
+            // constantly bad state, this limits log messages to about once per
+            // hour (assuming approximately 10 second integrations).
+            if(flagsum_errors++ % 600 == 0) {
+              syslog(LOG_ERR, "Flagged %d baseline-channels", total_flagsum);
+            }
+          }
         } // end if cb->n_skip_dumps...
 
         cb->rd_win = (cb->rd_win + 1) % cb->nwin;
