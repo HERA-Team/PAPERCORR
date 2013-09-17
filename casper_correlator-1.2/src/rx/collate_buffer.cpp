@@ -405,7 +405,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
           // more F engines than X engines), then the "n_ants_per_feng" setting
           // in the config file should be the real number of antennas per F
           // engine multipled by N.
-          ch += ((cb->nchan /(cb->nant/cb->nants_per_feng)) * pkt.instids.engine_id);
+          ch += cb->nchan_per_x * pkt.instids.engine_id;
         } else {
           ch = (ch % ch_per_x) * (cb->nant /X_PER_F) + pkt.instids.engine_id;
         }
