@@ -56,13 +56,15 @@ class CorrConf:
         #print 'got serverstring ',serverstr
         server_port_strings = serverstr.split(LISTDELIMIT)
         self.servers=[]
-        for i in range(len(server_port_strings)):
-            tokens_out = server_port_strings[i].split(PORTDELIMIT)
-            if len(tokens_out)==2:
-                self.config['servers'].append({'server':tokens_out[0]})                
-                self.config['servers'][i].update({'port':int(tokens_out[1])})
-            else:
-                raise RuntimeError('Error parsing server section: did not get port and ip addr for server') 
+        # Parse server specs if any were given
+        if len(server_port_strings[0]) > 0:
+            for i in range(len(server_port_strings)):
+                tokens_out = server_port_strings[i].split(PORTDELIMIT)
+                if len(tokens_out)==2:
+                    self.config['servers'].append({'server':tokens_out[0]})
+                    self.config['servers'][i].update({'port':int(tokens_out[1])})
+                else:
+                    raise RuntimeError('Error parsing server section: did not get port and ip addr for server')
 
         self.config['timeserver'] = self.cp.get('borphserver','timeserver')
         self.config['bitstream'] = self.cp.get('borphserver','bitstream')
@@ -104,7 +106,9 @@ class CorrConf:
 
         gpuips = self.cp.get('correlator','gpu_ip').split(LISTDELIMIT)
         if len(gpuips) != len(self.config['servers']):
-            print 'Number of fengines (servers) and xengines (gpu_ip) does not match!'
+            # Print warning only if not using GPU X engines
+            if self.config['payload_data_type'] != 1:
+                print 'Number of fengines (servers) and xengines (gpu_ip) does not match!'
             self.config['gpu_ips'] = []
         else:
             self.config['gpu_ips'] = []
