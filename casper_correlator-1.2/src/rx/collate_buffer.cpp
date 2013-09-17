@@ -387,7 +387,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     total_packet_count++;
     xids[pkt.instids.engine_id]++;
 
-    ch_per_x = (cb->nchan / cb->nant) * X_PER_F;
+    ch_per_x = (cb->nchan / cb->nant) * X_PER_F; // only used for FPGA X engine
     prev_cnt = pkt.heap_off / N_BYTES / 2;
     // Step through packet data and copy it into the CollateBuffer buffer
     for (cnt=0; cnt < pkt.pktinfo.len; cnt += N_BYTES*2) {

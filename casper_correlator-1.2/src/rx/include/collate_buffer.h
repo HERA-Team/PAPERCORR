@@ -19,7 +19,7 @@
 #define N_BYTES         4
 #define NOTIME          -1
 #define MAX_REJECT      100
-#define X_PER_F         2
+#define X_PER_F         2 // Only ued for FPGA X engine
 #define ADC_RATE        100000000
 #define TIME_SCALE      128
 #define ACC_RANGE       2
