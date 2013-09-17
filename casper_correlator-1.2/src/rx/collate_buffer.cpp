@@ -224,7 +224,8 @@ void set_cb_callback(CollateBuffer *cb,
 // Put an incoming packet in the correct place in memory, and initiate
 // readout via a callback, which is passed cb->userdata
 int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
-    static int xids[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    static int num_xids = 0;
+    static int *xids = NULL;
     static int total_packet_count = 0;
     static int packet_count = 0;
     static int flagsum_errors = 0;
@@ -237,6 +238,22 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     int i, j, xidx, cp_id;
     float *data = cb->visdata;
     int *flags = cb->visflags;
+
+    // Lazy init num_xids and xids
+    if(num_xids == 0) {
+      num_xids = (cb->nchan + cb->nchan_per_x - 1) / cb->nchan_per_x;
+      fprintf(stderr, "num_xids is computed to be %d\n", num_xids);
+      xids = (int *)calloc(num_xids, sizeof(int));
+      // Sanity checks
+      if(num_xids == 0) {
+        fprintf(stderr, "num_xids is computed to be 0\n");
+        return 1;
+      }
+      if(xids == NULL) {
+        fprintf(stderr, "could not allocate memory for %d xid counters\n", num_xids);
+        return 1;
+      }
+    }
 
     // Ignore data packets until sync_time is set
     if(cb->sync_time == 0) {
