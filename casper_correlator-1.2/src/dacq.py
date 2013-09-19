@@ -2,6 +2,26 @@
 import aipy as a, numpy as n
 import rx
 import os, ephem,time
+import ctypes
+
+CLOCK_MONOTONIC_RAW = 4 # see <linux/time.h>
+
+class timespec(ctypes.Structure):
+    _fields_ = [
+        ('tv_sec', ctypes.c_long),
+        ('tv_nsec', ctypes.c_long)
+    ]
+
+librt = ctypes.CDLL('librt.so', use_errno=True)
+clock_gettime = librt.clock_gettime
+clock_gettime.argtypes = [ctypes.c_int, ctypes.POINTER(timespec)]
+
+def monotonic_ns():
+    t = timespec()
+    if clock_gettime(CLOCK_MONOTONIC_RAW, ctypes.pointer(t)) != 0:
+        errno_ = ctypes.get_errno()
+        raise OSError(errno_, os.strerror(errno_))
+    return t.tv_sec * 1e9 + t.tv_nsec
 
 def start_uv_file(filename, aa, pols, nchan, sfreq, sdf, inttime):
     # Set the type of 'corr' to 'r' since we asked miriad to store visdata
@@ -65,6 +85,8 @@ class DataReceiver(rx.BufferSocket):
         self.current_time = 0
         self.t_per_file = t_per_file
         self.redis = redis
+        self.uvio_total_ns = 0
+        self.uvio_calls = 0
 
         def filewrite_callback(i,j,pol,tcnt,data,flags):
             # Update time and baseline calculations if tcnt changes, possibly
@@ -81,7 +103,13 @@ class DataReceiver(rx.BufferSocket):
             #if i==1 and j==1 and pol==1: print '1-1-1: ',sum(data)
 
             if (t != self.current_time):
+                if self.uvio_calls > 0:
+                    print 'Total time spent in %s uvio calls is %.1f seconds (%f ns/call)' % (
+                        self.uvio_calls, float(self.uvio_total_ns)/1e9, float(self.uvio_total_ns)/self.uvio_calls)
+
                 self.current_time = t
+                self.uvio_calls = 0
+                self.uvio_total_ns = 0
 
                 if (t > (self.filestart + self.t_per_file)) or self.uv == None:
                     if self.uv != None:
@@ -122,7 +150,10 @@ class DataReceiver(rx.BufferSocket):
                 except Exception, e:
                     print 'redis exception: %s' % e
 
+            self.uvio_total_ns -= monotonic_ns()
             self.uv.write(preamble, data, flags)
+            self.uvio_total_ns += monotonic_ns()
+            self.uvio_calls += 1
 
         self.cb.set_callback(filewrite_callback)
         self.set_callback(self.cb)

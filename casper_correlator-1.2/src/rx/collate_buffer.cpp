@@ -1,4 +1,9 @@
 #include <syslog.h>
+
+#ifdef PACKET_STATS
+#include <time.h>
+#endif
+
 #include "include/corr_packet.h"
 #include "include/collate_buffer.h"
 #include "include/sdisp.h"
@@ -223,7 +228,8 @@ void set_cb_callback(CollateBuffer *cb,
 
 // Put an incoming packet in the correct place in memory, and initiate
 // readout via a callback, which is passed cb->userdata
-int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
+int collate_packet(CollateBuffer *cb, CorrPacket pkt)
+{
     static int num_xids = 0;
     static int *xids = NULL;
     static int total_packet_count = 0;
@@ -238,6 +244,17 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     int i, j, xidx, cp_id;
     float *data = cb->visdata;
     int *flags = cb->visflags;
+
+#ifdef PACKET_STATS
+#define ELAPSED_NS(start,stop) \
+  (((int64_t)stop.tv_sec-start.tv_sec)*1000*1000*1000+(stop.tv_nsec-start.tv_nsec))
+
+    struct timespec overall_start, overall_finish;
+    struct timespec process_start, process_finish;
+    struct timespec callback_start, callback_finish;
+    uint64_t process_elapsed_ns, callback_elapsed_ns;
+#endif // PACKET_STATS
+
 
     // Lazy init num_xids and xids
     if(num_xids == 0) {
@@ -289,16 +306,26 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
     } else if (pkt_t > cb->cur_t) {
         if(cb->n_skip_dumps > 0) {
           cb->n_skip_dumps--;
+#ifdef PACKET_STATS
+          // Zero out packet count and xid counters
+          packet_count = 0;
+          for(i=0; i < num_xids; i++) {
+            xids[i] = 0;
+          }
+#endif // PACKET_STATS
         } else {
           // Case for locked on integration and rx in-range pkt w/ new time - time to read out an integration window.
           printf("Reading out window %d.\n", cb->rd_win);
 #ifdef PACKET_STATS
+          process_elapsed_ns = 0;
+          callback_elapsed_ns = 0;
+          clock_gettime(CLOCK_MONOTONIC, &overall_start);
           printf("Packet count = %d (Total %d); X Engine Packet Counts:\n", packet_count, total_packet_count);
-          printf("x0=%i", xids[0]);
+          printf("x00=%i", xids[0]);
           packet_count = 0;
           xids[0]=0;
-          for(i=1; i< 16; i++) {
-            printf(", x%i=%i", i, xids[i]);
+          for(i=1; i < num_xids; i++) {
+            printf(", x%02i=%04i", i, xids[i]);
             xids[i] = 0;
           }
           printf("\n");
@@ -311,6 +338,11 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
             cp_id = pol;
             for (j=0; j < cb->nant; j++) {
               for (i=0; i <= j; i++) {
+
+#ifdef PACKET_STATS
+                  clock_gettime(CLOCK_MONOTONIC, &process_start);
+#endif // PACKET_STATS
+
                   for (ch=0; ch < cb->nchan; ch++) {
                       addr = ADDR((*cb),i,j,pol,ch,cb->rd_win);
                       //Scale data back to 4bit*4bit values, and correct for PAPER's reversed channel order.
@@ -360,12 +392,23 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
                     }
                   }
 
+#ifdef PACKET_STATS
+                  clock_gettime(CLOCK_MONOTONIC, &process_finish);
+                  process_elapsed_ns += ELAPSED_NS(process_start, process_finish);
+                  clock_gettime(CLOCK_MONOTONIC, &callback_start);
+#endif // PACKET_STATS
+
                   //if (cb->callback(i,j,pol,double(cb->cur_t)/ADC_RATE, data,flags,cb->nchan, cb->userdata))
                   if (cb->callback(i,j,pol,cb->cur_t, data,flags,cb->nchan, cb->userdata))
                   {
                     printf("CollateBuffer bailed on callback.\n");
                     return 1;
                   }
+
+#ifdef PACKET_STATS
+                  clock_gettime(CLOCK_MONOTONIC, &callback_finish);
+                  callback_elapsed_ns += ELAPSED_NS(callback_start, callback_finish);
+#endif // PACKET_STATS
 
                   cp_id+=4;
               } // end of for i <= j
@@ -390,6 +433,14 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt) {
               syslog(LOG_ERR, "Flagged %d baseline-channels", total_flagsum);
             }
           }
+
+#ifdef PACKET_STATS
+          clock_gettime(CLOCK_MONOTONIC, &overall_finish);
+          printf("Process  elapsed time %.1f seconds\n", process_elapsed_ns/1e9);
+          printf("Callback elapsed time %.1f seconds\n", callback_elapsed_ns/1e9);
+          printf("Overall  elapsed time %.1f seconds\n", ELAPSED_NS(overall_start, overall_finish)/1e9);
+#endif // PACKET_STATS
+
         } // end if cb->n_skip_dumps...
 
         cb->rd_win = (cb->rd_win + 1) % cb->nwin;
