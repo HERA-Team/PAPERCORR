@@ -37,6 +37,15 @@ ants = [aipy.phs.Antenna(a[0],a[1],a[2],beam) for a in ants]
 aa = aipy.phs.AntennaArray(ants=ants, location=location)
 sdisp_destination_ip = "127.0.0.1"
 rx=None
+use_redis = c.redis
+
+if len(sys.argv) > 2 and sys.argv[2] == '--no-redis':
+    use_redis = None
+
+if use_redis is None:
+    print 'Autocorrelations will NOT be stored in redis'
+else:
+    print 'Autocorrelations will be stored in redis'
 
 # Function to handle SIGINT
 def stop_taking_data(*args):
@@ -56,7 +65,7 @@ try:
                 nwin=n_windows_to_buffer, bufferslots=n_bufferslots, 
                 payload_len=max_payload_len, payload_data_type=payload_data_type,
                 sdisp=1, sdisp_destination_ip=sdisp_destination_ip,
-                acc_len=acc_len)
+                acc_len=acc_len, redis=use_redis)
     rx.start(port)
 
     signal.signal(signal.SIGINT, stop_taking_data)

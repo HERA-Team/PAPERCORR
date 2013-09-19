@@ -51,7 +51,8 @@ class DataReceiver(rx.BufferSocket):
     def __init__(self, aa, nants_per_feng=4, pols=['xx','yy','xy','yx'], adc_rate=100000000.,
             nchan=2048, xeng_chan_mode=0, sfreq=0.121142578125, sdf=7.32421875e-05,
             inttime=14.3165578842, t_per_file=ephem.hour, payload_data_type=0,
-            nwin=4, bufferslots=128, payload_len=8192, sdisp=0, sdisp_destination_ip="127.0.0.1", acc_len=1024*128):
+            nwin=4, bufferslots=128, payload_len=8192, sdisp=0, sdisp_destination_ip="127.0.0.1",
+            acc_len=1024*128, redis=None):
         rx.BufferSocket.__init__(self, item_count=bufferslots, payload_len=payload_len)
         self.cb = rx.CollateBuffer(nant=len(aa), nants_per_feng=nants_per_feng, npol=len(pols),
             nchan=nchan, xeng_chan_mode=xeng_chan_mode, nwin=nwin, sdisp=sdisp,
@@ -63,6 +64,7 @@ class DataReceiver(rx.BufferSocket):
         self.filestart = 0.
         self.current_time = 0
         self.t_per_file = t_per_file
+        self.redis = redis
 
         def filewrite_callback(i,j,pol,tcnt,data,flags):
             # Update time and baseline calculations if tcnt changes, possibly
@@ -111,6 +113,15 @@ class DataReceiver(rx.BufferSocket):
                 # Clips RFI to amplitude 1, motivated by desire to avoid miriad
                 # dynamic range readout issue for scaled shorts.
                 data = n.where(dabs>1.0,data/dabs,data)
+
+            # If redis is given and this is an xx or yy autocorrelation
+            if self.redis is not None and i==j and pols[pol] in ['xx','yy']:
+                try:
+                    key = 'visdata://%d/%d/%s' % (i, j, pols[pol])
+                    self.redis.hmset(key, {'time': str(t), 'data': n.abs(data).tostring()})
+                except Exception, e:
+                    print 'redis exception: %s' % e
+
             self.uv.write(preamble, data, flags)
 
         self.cb.set_callback(filewrite_callback)
