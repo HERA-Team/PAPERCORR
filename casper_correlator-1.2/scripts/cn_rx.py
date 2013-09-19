@@ -55,8 +55,6 @@ def stop_taking_data(*args):
       rx.stop()
     exit(0)
 
-print "Sending signal display data to",sdisp_destination_ip
-
 try:
     rx=casper_correlator.dacq.DataReceiver(aa, nants_per_feng=nants_per_feng,
                 pols=pols, adc_rate=100000000, nchan=n_chans,
@@ -64,7 +62,7 @@ try:
                 inttime=int_time, t_per_file=t_per_file,
                 nwin=n_windows_to_buffer, bufferslots=n_bufferslots, 
                 payload_len=max_payload_len, payload_data_type=payload_data_type,
-                sdisp=1, sdisp_destination_ip=sdisp_destination_ip,
+                sdisp=0, sdisp_destination_ip=sdisp_destination_ip,
                 acc_len=acc_len, redis=use_redis)
     rx.start(port)
 
