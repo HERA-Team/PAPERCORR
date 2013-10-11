@@ -186,13 +186,24 @@ socket_t setup_network_listener(short port) {
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, 
             (void *)&on, sizeof(on)) == -1) return -1;
 
-    // Increase recv buffer for this sock
-    int bufsize = 128*1024*1024; // 128 MB
+    // Increase recv buffer for this sock to 257 MB, enough to buffer one
+    // entire dump of a 256 input 1024 channel correlator:
+    //
+    //        (257*256/2) baselines/dump
+    //   x          1024  channels/baseline
+    //   x             8  bytes/channel
+    //   ----------------------------------
+    //   = 257*1024*1024 bytes per dump
+    //   = 257 MiB/dump
+    int bufsize = 257*1024*1024;
     socklen_t ss = sizeof(int);
     int rv = setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &bufsize, ss);
     if (rv<0) {
         perror("setsockopt");
     }
+    // Reset bufsize to -1 so we can tell for sure whether getsockopt really
+    // worked.
+    bufsize = -1;
     rv = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &bufsize, &ss);
     if (rv==0) {
         printf("Using SO_RCVBUF size %d\n", bufsize);
