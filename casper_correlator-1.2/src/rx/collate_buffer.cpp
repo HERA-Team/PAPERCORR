@@ -320,12 +320,10 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt)
           process_elapsed_ns = 0;
           callback_elapsed_ns = 0;
           clock_gettime(CLOCK_MONOTONIC, &overall_start);
-          printf("Packet count = %d (Total %d); X Engine Packet Counts:\n", packet_count, total_packet_count);
-          printf("x00=%i", xids[0]);
+          printf("Packet count = %d (Total %d); X Engine Packet Counts:", packet_count, total_packet_count);
           packet_count = 0;
-          xids[0]=0;
-          for(i=1; i < num_xids; i++) {
-            printf(", x%02i=%04i", i, xids[i]);
+          for(i=0; i < num_xids; i++) {
+            printf("%sx%02i=%04i", (i%8 == 0 ? "\n" : ", "), i, xids[i]);
             xids[i] = 0;
           }
           printf("\n");
