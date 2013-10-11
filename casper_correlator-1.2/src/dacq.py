@@ -23,7 +23,7 @@ def monotonic_ns():
         raise OSError(errno_, os.strerror(errno_))
     return t.tv_sec * 1e9 + t.tv_nsec
 
-def start_uv_file(filename, aa, pols, nchan, sfreq, sdf, inttime):
+def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime):
     # Set the type of 'corr' to 'r' since we asked miriad to store visdata
     # as floats (aka reals) to avoid dynamic range problem with scaled shorts.
     # Note that this requires aipy version 1.0.1 or newer!!!
@@ -39,7 +39,7 @@ def start_uv_file(filename, aa, pols, nchan, sfreq, sdf, inttime):
     uv.add_var('dec'     ,'d'); uv['dec'] = aa.lat
     uv.add_var('obsdec'  ,'d'); uv['obsdec'] = aa.lat
     uv.add_var('longitu' ,'d'); uv['longitu'] = aa.long
-    uv.add_var('npol'    ,'i'); uv['npol'] = len(pols)
+    uv.add_var('npol'    ,'i'); uv['npol'] = npol
     uv.add_var('nspect'  ,'i'); uv['nspect'] = 1
     uv.add_var('nants'   ,'i'); uv['nants'] = len(aa)
     uv.add_var('antpos'  ,'d')
@@ -79,11 +79,13 @@ class DataReceiver(rx.BufferSocket):
             sdisp_destination_ip=sdisp_destination_ip, acc_len=acc_len)
         # Define a file-writing callback that starts/ends files when
         # appropriate and updates variables
-        self.uv = None
-        self.adc_rate=float(adc_rate)
-        self.filestart = 0.
-        self.current_time = 0
+        npol = len(pols)
+        self.uv = [None] * npol
+        self.fname = [None] * npol
+        self.filestart = [0.] * npol
+        self.current_time = [0] * npol
         self.t_per_file = t_per_file
+        self.adc_rate=float(adc_rate)
         self.redis = redis
         self.uvio_total_ns = 0
         self.uvio_calls = 0
@@ -102,41 +104,58 @@ class DataReceiver(rx.BufferSocket):
             #if i==1 and j==1 and pol==0: print '1-1-0: ',sum(data)
             #if i==1 and j==1 and pol==1: print '1-1-1: ',sum(data)
 
-            if (t != self.current_time):
-                if self.uvio_calls > 0:
+            if (t != self.current_time[pol]):
+                self.current_time[pol] = t
+
+                if self.uvio_calls > 0 and pol == 0:
                     print 'Total time spent in %s uvio calls is %.1f seconds (%f ns/call)' % (
                         self.uvio_calls, float(self.uvio_total_ns)/1e9, float(self.uvio_total_ns)/self.uvio_calls)
+                    self.uvio_calls = 0
+                    self.uvio_total_ns = 0
 
-                self.current_time = t
-                self.uvio_calls = 0
-                self.uvio_total_ns = 0
-
-                if (t > (self.filestart + self.t_per_file)) or self.uv == None:
-                    if self.uv != None:
-                        del(self.uv)
+                if (t > (self.filestart[pol] + self.t_per_file)) or self.uv[pol] == None:
+                    if self.uv[pol] != None:
+                        # Work with filename for the given polarization
+                        fnamepol = self.fname[pol]
+                        # Get reference to the UV object self.uv[pol] and set
+                        # self.uv[pol] to None so that the UV object can be
+                        # deleted without altering the ordering of other
+                        # elements in self.uv array.  This is insane but
+                        # seemingly necessary since the UV destructor *MUST* be
+                        # called to properly close the dataset, but if one were
+                        # to do the "normal" thing of "del(self.uv[pol])", then
+                        # the elements in self.uv after pol are shifted down
+                        # and things get all confused.
+                        uvpol, self.uv[pol] = self.uv[pol], None
+                        del(uvpol)
                         print 'Ending file:',
-                        print self.fname, '->', self.fname.replace('.tmp','')
-                        os.rename(self.fname, self.fname.replace('.tmp',''))
-                    self.fname = 'zen.%07.5f.uv.tmp' % t
+                        print fnamepol, '->', fnamepol.replace('.tmp','')
+                        os.rename(fnamepol, fnamepol.replace('.tmp',''))
+                    # Create new filename
+                    fnamepol = self.fname[pol] = 'zen.%07.5f.%s.uv.tmp' % (t, pols[pol])
+                    # Record new file start time
+                    self.filestart[pol] = t
                     print a.phs.juldate2ephem(t),
-                    print 'Starting file:', self.fname
-                    self.uv = start_uv_file(self.fname, aa, pols=pols,
-                        nchan=nchan, sfreq=sfreq, sdf=sdf, inttime=inttime)
-                    self.filestart = t
+                    print 'Starting file:', fnamepol
+                    # Start new single cross-pol dataset
+                    self.uv[pol] = start_uv_file(
+                        fnamepol, aa, npol=1, nchan=nchan,
+                        sfreq=sfreq, sdf=sdf, inttime=inttime)
+                    # One unique polarization per file
+                    self.uv[pol]['pol'] = a.miriad.str2pol[pols[pol]]
 
                 aa.set_jultime(t)
                 lst = aa.sidereal_time()
-                self.uv['lst'] = lst
-                self.uv['ra'] = lst
-                self.uv['obsra'] = lst
+                self.uv[pol]['lst'] = lst
+                self.uv[pol]['ra'] = lst
+                self.uv[pol]['obsra'] = lst
 
-            self.uv['pol'] = a.miriad.str2pol[pols[pol]]
             crd = aa[j].pos - aa[i].pos
             preamble = (crd, t, (i,j))
 
             # Only clip RFI if visibilities are being stored as scaled shorts
             # and it is not an autocorrelation.
-            if self.uv.vartable['corr'] == 'j' and (i!=j or pols[pol] in ['xy','yx']):
+            if self.uv[pol].vartable['corr'] == 'j' and (i!=j or pols[pol] in ['xy','yx']):
                 dabs = n.abs(data)
                 # Clips RFI to amplitude 1, motivated by desire to avoid miriad
                 # dynamic range readout issue for scaled shorts.
@@ -146,12 +165,13 @@ class DataReceiver(rx.BufferSocket):
             if self.redis is not None and i==j and pols[pol] in ['xx','yy']:
                 try:
                     key = 'visdata://%d/%d/%s' % (i, j, pols[pol])
-                    self.redis.hmset(key, {'time': str(t), 'data': n.abs(data).tostring()})
+                    self.redis.hmset(key,
+                        {'time': str(t), 'data': n.abs(data).tostring()})
                 except Exception, e:
                     print 'redis exception: %s' % e
 
             self.uvio_total_ns -= monotonic_ns()
-            self.uv.write(preamble, data, flags)
+            self.uv[pol].write(preamble, data, flags)
             self.uvio_total_ns += monotonic_ns()
             self.uvio_calls += 1
 
@@ -161,13 +181,19 @@ class DataReceiver(rx.BufferSocket):
     def set_start_time(self, start_jd, tscale):
         self.start_jd = start_jd
         self.tscale = tscale
+
     def stop(self):
         rx.BufferSocket.stop(self)
+        # Close data sets
         if self.uv != None:
+            # Delete entire self.uv array, which will delete each element,
+            # which will call their destructors (hopefully, destructors are not
+            # guaranteed to be called!), which will close the datasets.  In
+            # practice this works OK with the standard python implementation
+            # (aka "CPython").
             del(self.uv)
+        # Rename datasets
+        for fnamepol in self.fname:
             print 'Ending file:',
-            print self.fname, '->', self.fname.replace('.tmp','')
-            os.rename(self.fname, self.fname.replace('.tmp',''))
-
-
-
+            print fnamepol, '->', fnamepol.replace('.tmp','')
+            os.rename(fnamepol, fnamepol.replace('.tmp',''))
