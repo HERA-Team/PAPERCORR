@@ -194,6 +194,7 @@ class DataReceiver(rx.BufferSocket):
             del(self.uv)
         # Rename datasets
         for fnamepol in self.fname:
-            print 'Ending file:',
-            print fnamepol, '->', fnamepol.replace('.tmp','')
-            os.rename(fnamepol, fnamepol.replace('.tmp',''))
+            if fnamepol is not None:
+                print 'Ending file:',
+                print fnamepol, '->', fnamepol.replace('.tmp','')
+                os.rename(fnamepol, fnamepol.replace('.tmp',''))
