@@ -306,6 +306,7 @@ int collate_packet(CollateBuffer *cb, CorrPacket pkt)
     } else if (pkt_t > cb->cur_t) {
         if(cb->n_skip_dumps > 0) {
           cb->n_skip_dumps--;
+          printf("Skipping dump (%d more to skip)\n", cb->n_skip_dumps);
 #ifdef PACKET_STATS
           // Zero out packet count and xid counters
           packet_count = 0;
