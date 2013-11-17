@@ -72,7 +72,7 @@ class DataReceiver(rx.BufferSocket):
             nchan=2048, xeng_chan_mode=0, sfreq=0.121142578125, sdf=7.32421875e-05,
             inttime=14.3165578842, t_per_file=ephem.hour, payload_data_type=0,
             nwin=4, bufferslots=128, payload_len=8192, sdisp=0, sdisp_destination_ip="127.0.0.1",
-            acc_len=1024*128, redis=None):
+            acc_len=1024*128, redis=None, hookup=None):
         rx.BufferSocket.__init__(self, item_count=bufferslots, payload_len=payload_len)
         self.cb = rx.CollateBuffer(nant=len(aa), nants_per_feng=nants_per_feng, npol=len(pols),
             nchan=nchan, xeng_chan_mode=xeng_chan_mode, nwin=nwin, sdisp=sdisp,
@@ -87,6 +87,7 @@ class DataReceiver(rx.BufferSocket):
         self.t_per_file = t_per_file
         self.adc_rate=float(adc_rate)
         self.redis = redis
+        self.hookup = hookup
         self.uvio_total_ns = 0
         self.uvio_calls = 0
 
@@ -149,6 +150,72 @@ class DataReceiver(rx.BufferSocket):
                 self.uv[pol]['lst'] = lst
                 self.uv[pol]['ra'] = lst
                 self.uv[pol]['obsra'] = lst
+
+            # The parameters i, j, and pol have been derived solely from
+            # correlator input index and may have nothing to do with actual
+            # antpol information.  If we have hookup information, we can derive
+            # the correlator input indexs for both inputs and use that to
+            # lookup the two antpols in this baseline.  In theory, (i,pol_0) <
+            # (j,pol_1) and the baseline is conjugated appropriately, but if
+            # antpol(i,pol_0) > antpol(j,pol_1) then the baseline data needs to
+            # be conjugated again.
+            if self.hookup is not None:
+                # If we get any exceptions, skip the hookup stuff.  This is
+                # likely to lead to crap data, but it's better than crashing
+                # and leading to no data.
+                try:
+                    # Compute input indexes
+                    in0 = 2*i + (ord(pols[pol][0]) - ord('x'))%2
+                    in1 = 2*j + (ord(pols[pol][1]) - ord('x'))%2
+                    # Lookup antnums and pol strings.  The hookup dictionary
+                    # maps intput number to [antnum, p], where antnum is
+                    # integer and p is lowercase 'x' or 'y'.
+                    a0, p0 = hookup[in0]
+                    a1, p1 = hookup[in1]
+                    # Compute
+                    p = pols.index(p0 + p1)
+
+                    # Conjugate the data if needed.  The following chart shows
+                    # when conjugation is needed and when it's not:
+                    #
+                    #                   +---------------------+
+                    #                   | Correlator Computed |
+                    #                   +------+------+-------+
+                    #                   | Auto | Auto | Cross |
+                    #                   |  XY  |  YX  |  AB   |
+                    #     +---+---------+------+------+-------+
+                    #     | R | Auto XY |  OK  | CONJ |  OK   | Row1
+                    #     | e +---------+------+------+-------+
+                    #     | a | Auto YX | CONJ |  OK  | CONJ  | Row2
+                    #     | l +---------+------+------+-------+
+                    #     | i |Cross CD |  OK  | CONJ |  OK   | Row3
+                    #     | t +---------+------+------+-------+
+                    #     | y |Cross DC | CONJ |  OK  | CONJ  | Row4
+                    #     +---+---------+------+------+-------+
+                    #                     Col1   Col2   Col3
+                    #
+                    #  Notice that Col2 is the inverse of Col1 and Col3.
+
+                    need_conj = False
+
+                    # If Reality "Cross CD" or "Auto YX" (i.e. Row4 or Row2)
+                    if (a0 > a1) or (a0 == a1 and pols[p] == 'yx'):
+                        need_conj = not(need_conj)
+
+                    # If Correlator Computed "Auto YX" (i.e. Col2)
+                    if i == j and pols[pol] == 'yx':
+                        need_conj = not(need_conj)
+
+                    if need_conj:
+                        # Do in-place conjugation
+                        data.conj(data)
+
+                    # Update i, j, and pol with new values
+                    i, j, pol = a0, a1, p
+                except:
+                   print sys.exc_info()[0]
+                   print 'Ignoring hookup info!!!'
+                   self.hookup = None
 
             crd = aa[j].pos - aa[i].pos
             preamble = (crd, t, (i,j))
