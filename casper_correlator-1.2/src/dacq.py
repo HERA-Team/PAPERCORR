@@ -92,6 +92,80 @@ class DataReceiver(rx.BufferSocket):
         self.uvio_calls = 0
 
         def filewrite_callback(i,j,pol,tcnt,data,flags):
+            # The parameters i, j, and pol have been derived solely from
+            # correlator input index and may have nothing to do with actual
+            # antpol information.  If we have hookup information, we can derive
+            # the correlator input indexs for both inputs and use that to
+            # lookup the two antpols in this baseline and relabel it
+            # accordingly.  The correlator has conjugated the data according to
+            # (i,pol_0) < (j,pol_1), but the data may need to be conjgated
+            # (again) depending on how i, j, and pol map to reality.  See the
+            # comments below for more details.
+            if self.hookup is not None:
+                # If we get any exceptions, skip the hookup stuff.  This is
+                # likely to lead to crap data, but it's better than crashing
+                # and leading to no data.
+                try:
+                    # Compute input indexes
+                    in0 = 2*i + (ord(pols[pol][0]) - ord('x'))%2
+                    in1 = 2*j + (ord(pols[pol][1]) - ord('x'))%2
+                    # Lookup antnums and pol strings.  The hookup dictionary
+                    # maps intput number to [antnum, p], where antnum is
+                    # integer and p is lowercase 'x' or 'y'.
+                    a0, p0 = hookup[in0]
+                    a1, p1 = hookup[in1]
+                    # Lookup pol-pair index ("p" is "reality" polarization
+                    # index, "pol" is "correlator computed" polarization.
+                    p = pols.index(p0 + p1)
+
+                    # Conjugate the data if needed.  The following chart shows
+                    # when conjugation is needed (CONJ) and when it's not (OK):
+                    #
+                    #                   +---------------------+
+                    #                   | Correlator Computed |
+                    #                   +------+------+-------+
+                    #                   | Auto | Auto | Cross |
+                    #                   |  XY  |  YX  |  AB   |
+                    #     +---+---------+------+------+-------+
+                    #     | R | Auto XY |  OK  | CONJ |  OK   | Row1
+                    #     | e +---------+------+------+-------+
+                    #     | a | Auto YX | CONJ |  OK  | CONJ  | Row2
+                    #     | l +---------+------+------+-------+
+                    #     | i |Cross CD |  OK  | CONJ |  OK   | Row3
+                    #     | t +---------+------+------+-------+
+                    #     | y |Cross DC | CONJ |  OK  | CONJ  | Row4
+                    #     +---+---------+------+------+-------+
+                    #                     Col1   Col2   Col3
+                    #
+                    #  Notice that Col2 is the inverse of Col1 and Col3.
+
+                    need_conj = False
+
+                    # If Reality "Cross CD" or "Auto YX" (i.e. Row4 or Row2)
+                    if (a0 > a1) or (a0 == a1 and pols[p] == 'yx'):
+                        need_conj = not(need_conj)
+
+                    # If Correlator Computed "Auto YX" (i.e. Col2)
+                    if i == j and pols[pol] == 'yx':
+                        need_conj = not(need_conj)
+
+                    if need_conj:
+                        # Do in-place conjugation
+                        data.conj(data)
+
+                    # Ensure that the baseline is ordered properly in MIRIAD
+                    if a0 > a1:
+                        # Swap antennas and pols
+                        a0, a1 = a1, a0
+                        p = pols.index(p1 + p0)
+
+                    # Update i, j, and pol with new values
+                    i, j, pol = a0, a1, p
+                except:
+                   print sys.exc_info()[0]
+                   print 'Ignoring hookup info!!!'
+                   self.hookup = None
+
             # Update time and baseline calculations if tcnt changes, possibly
             # ending a file and starting a new one if necessary
 
@@ -150,72 +224,6 @@ class DataReceiver(rx.BufferSocket):
                 self.uv[pol]['lst'] = lst
                 self.uv[pol]['ra'] = lst
                 self.uv[pol]['obsra'] = lst
-
-            # The parameters i, j, and pol have been derived solely from
-            # correlator input index and may have nothing to do with actual
-            # antpol information.  If we have hookup information, we can derive
-            # the correlator input indexs for both inputs and use that to
-            # lookup the two antpols in this baseline.  In theory, (i,pol_0) <
-            # (j,pol_1) and the baseline is conjugated appropriately, but if
-            # antpol(i,pol_0) > antpol(j,pol_1) then the baseline data needs to
-            # be conjugated again.
-            if self.hookup is not None:
-                # If we get any exceptions, skip the hookup stuff.  This is
-                # likely to lead to crap data, but it's better than crashing
-                # and leading to no data.
-                try:
-                    # Compute input indexes
-                    in0 = 2*i + (ord(pols[pol][0]) - ord('x'))%2
-                    in1 = 2*j + (ord(pols[pol][1]) - ord('x'))%2
-                    # Lookup antnums and pol strings.  The hookup dictionary
-                    # maps intput number to [antnum, p], where antnum is
-                    # integer and p is lowercase 'x' or 'y'.
-                    a0, p0 = hookup[in0]
-                    a1, p1 = hookup[in1]
-                    # Compute
-                    p = pols.index(p0 + p1)
-
-                    # Conjugate the data if needed.  The following chart shows
-                    # when conjugation is needed and when it's not:
-                    #
-                    #                   +---------------------+
-                    #                   | Correlator Computed |
-                    #                   +------+------+-------+
-                    #                   | Auto | Auto | Cross |
-                    #                   |  XY  |  YX  |  AB   |
-                    #     +---+---------+------+------+-------+
-                    #     | R | Auto XY |  OK  | CONJ |  OK   | Row1
-                    #     | e +---------+------+------+-------+
-                    #     | a | Auto YX | CONJ |  OK  | CONJ  | Row2
-                    #     | l +---------+------+------+-------+
-                    #     | i |Cross CD |  OK  | CONJ |  OK   | Row3
-                    #     | t +---------+------+------+-------+
-                    #     | y |Cross DC | CONJ |  OK  | CONJ  | Row4
-                    #     +---+---------+------+------+-------+
-                    #                     Col1   Col2   Col3
-                    #
-                    #  Notice that Col2 is the inverse of Col1 and Col3.
-
-                    need_conj = False
-
-                    # If Reality "Cross CD" or "Auto YX" (i.e. Row4 or Row2)
-                    if (a0 > a1) or (a0 == a1 and pols[p] == 'yx'):
-                        need_conj = not(need_conj)
-
-                    # If Correlator Computed "Auto YX" (i.e. Col2)
-                    if i == j and pols[pol] == 'yx':
-                        need_conj = not(need_conj)
-
-                    if need_conj:
-                        # Do in-place conjugation
-                        data.conj(data)
-
-                    # Update i, j, and pol with new values
-                    i, j, pol = a0, a1, p
-                except:
-                   print sys.exc_info()[0]
-                   print 'Ignoring hookup info!!!'
-                   self.hookup = None
 
             crd = aa[j].pos - aa[i].pos
             preamble = (crd, t, (i,j))
