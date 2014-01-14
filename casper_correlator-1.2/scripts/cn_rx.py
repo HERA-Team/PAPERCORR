@@ -1,6 +1,7 @@
 #!/usr/bin/python -u
 import casper_correlator,corr,ephem,aipy,numpy,sys,socket,time,struct,syslog,signal
 import yaml
+import math
 
 syslog.openlog('cn_rx.py')
 
@@ -115,7 +116,15 @@ xeng_chan_mode = c.config['xeng_chan_mode']
 bandwidth = c.config['adc_clk']/2 # GHz
 sdf = bandwidth/n_chans
 sfreq = bandwidth # Second Nyquist zone
-location=0,0,0
+
+# This is the closest I have found to an offical position for PSA.
+# TODO Get this info from the config file.
+latitude  = -30.72149 * math.pi / 180.0
+longitude = +21.42829 * math.pi / 180.0
+# I found 1058 m and 1085 m in different paperwiki posts, so use 1075.0.
+altitude  = 1075.0
+location = latitude, longitude, altitude
+
 acc_len = c.config['acc_len'] * c.config['xeng_acc_len']
 int_time = 2*n_chans*acc_len/(bandwidth*2*1e9) #integration time in seconds
 #acc_len = 1
