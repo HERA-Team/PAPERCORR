@@ -113,6 +113,7 @@ nants_per_feng = c.config['n_ants_per_feng']
 port = c.config['rx_udp_port']
 n_chans = c.config['n_chans']
 xeng_chan_mode = c.config['xeng_chan_mode']
+clk_rate = c.config['adc_clk'] # GHz
 bandwidth = c.config['adc_clk']/2 # GHz
 sdf = bandwidth/n_chans
 sfreq = bandwidth # Second Nyquist zone
@@ -163,7 +164,7 @@ def stop_taking_data(*args):
 
 try:
     rx=casper_correlator.dacq.DataReceiver(aa, nants_per_feng=nants_per_feng,
-                pols=pols, adc_rate=100000000, nchan=n_chans,
+                pols=pols, adc_rate=clk_rate*1e9, nchan=n_chans,
                 xeng_chan_mode=xeng_chan_mode, sfreq=sfreq, sdf=sdf,
                 inttime=int_time, t_per_file=t_per_file,
                 nwin=n_windows_to_buffer, bufferslots=n_bufferslots,
@@ -183,6 +184,9 @@ try:
         trig_time = float(c.redis.get('roachf_init_time'))
     except:
         trig_time = float(c.redis.get('mcount_initialize_time'))
+
+    print 'Got trigger time of', trig_time
+
     time_skt = socket.socket(type=socket.SOCK_DGRAM)
     pkt_str=struct.pack('>HHHHQ',0x5453,3,0,1,int(trig_time))
     time_skt.sendto(pkt_str,(c.config['rx_udp_ip_str'],c.config['rx_udp_port']))

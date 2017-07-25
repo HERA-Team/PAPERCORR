@@ -20,8 +20,8 @@
 #define NOTIME          -1
 #define MAX_REJECT      100
 #define X_PER_F         2 // Only ued for FPGA X engine
-#define ADC_RATE        100000000
-#define TIME_SCALE      128
+#define ADC_RATE        200000000
+#define TIME_SCALE      256
 #define ACC_RANGE       2
 
 //ACC_RANGE is seconds around current timestamp which should be accepted as valid timestamps.
