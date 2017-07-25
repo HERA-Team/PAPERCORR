@@ -3,6 +3,8 @@ import aipy as a, numpy as n
 import rx
 import os, ephem,time
 import ctypes
+import hera_mc.utils
+import astropy.time
 
 CLOCK_MONOTONIC_RAW = 4 # see <linux/time.h>
 
@@ -65,6 +67,11 @@ def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime):
     uv.add_var('obsra'   ,'d')
     uv.add_var('baseline','r')
     uv.add_var('pol'     ,'i')
+    # Variables added in July 2017 for HERA deployment
+    uv.add_var('startt'   ,'d') # double precision gps time of first integration
+    uv.add_var('stopt'    ,'d') # double precicion gps time of last integration
+    uv.add_var('obsid'    ,'i') # int(floor(starttime))
+    uv.add_var('duration' ,'i') # integer seconds of an observation (starttime - stoptime)
     return uv
 
 class DataReceiver(rx.BufferSocket):
@@ -170,7 +177,9 @@ class DataReceiver(rx.BufferSocket):
             # ending a file and starting a new one if necessary
 
             #t is julian date. ephem measures days since noon, 31st Dec 1899 (!random!), so we need an offset from uni time:
-            t = a.phs.ephem2juldate(((tcnt/self.adc_rate) + 2209032000)*ephem.second)
+            t_unix = tcnt / self.adc_rate
+            t = a.phs.ephem2juldate((t_unix + 2209032000)*ephem.second)
+            
 
             #print "fwrite callback:",i,j,pol,tcnt,data.size,flags.size
 
@@ -189,7 +198,13 @@ class DataReceiver(rx.BufferSocket):
                     self.uvio_total_ns = 0
 
                 if (t > (self.filestart[pol] + self.t_per_file)) or self.uv[pol] == None:
+                    # Get the astropy.Time version of the time -- we're going to need it
+                    # to write the time-related file variables
+                    astro_time = astropy.time.Time(t_unix, format='unix')
                     if self.uv[pol] != None:
+                        # Write the stop-time variables
+                        uv[pol]['stoptime'] = astro_time.gps
+                        uv[pol]['duration'] = int(n.floor(astro_time.gps - uv[pol]['starttime']))
                         # Work with filename for the given polarization
                         fnamepol = self.fname[pol]
                         # Get reference to the UV object self.uv[pol] and set
@@ -216,6 +231,9 @@ class DataReceiver(rx.BufferSocket):
                     self.uv[pol] = start_uv_file(
                         fnamepol, aa, npol=1, nchan=nchan,
                         sfreq=sfreq, sdf=sdf, inttime=inttime)
+                    # Set the file start time and obsid
+                    self.uv[pol]['obsid'] = hera_mc.utils.calculate_obsid(astro_time)
+                    self.uv[pol]['startt'] = astro_time.gps
                     # One unique polarization per file
                     self.uv[pol]['pol'] = a.miriad.str2pol[pols[pol]]
 
