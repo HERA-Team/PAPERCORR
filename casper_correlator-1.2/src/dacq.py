@@ -32,7 +32,7 @@ def expand_cminfo(cminfo, field, default='', nants=128):
         x[ant] = cminfo[field][an]
     return x
 
-def start_uv_file(filename, aa, pols, nchan, sfreq, sdf, inttime, cminfo=None):
+def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime, cminfo=None):
     # Set the type of 'corr' to 'r' since we asked miriad to store visdata
     # as floats (aka reals) to avoid dynamic range problem with scaled shorts.
     # Note that this requires aipy version 1.0.1 or newer!!!
@@ -250,8 +250,10 @@ class DataReceiver(rx.BufferSocket):
                         fnamepol, aa, npol=1, nchan=nchan,
                         sfreq=sfreq, sdf=sdf, inttime=inttime)
                     # Set the file start time and obsid
-                    self.uv['obsid'] = hera_mc.utils.calculate_obsid(astro_time)
-                    self.uv['startt'] = astro_time.gps
+                    self.uv[pol]['obsid'] = hera_mc.utils.calculate_obsid(astro_time)
+                    self.uv[pol]['startt'] = astro_time.gps
+                    # One unique polarization per file
+                    self.uv[pol]['pol'] = a.miriad.str2pol[pols[pol]]
 
                 aa.set_jultime(t)
                 lst = aa.sidereal_time()
