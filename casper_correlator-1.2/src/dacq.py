@@ -5,6 +5,7 @@ import os, ephem,time
 import ctypes
 import hera_mc.utils
 import astropy.time
+import json
 
 CLOCK_MONOTONIC_RAW = 4 # see <linux/time.h>
 
@@ -25,7 +26,16 @@ def monotonic_ns():
         raise OSError(errno_, os.strerror(errno_))
     return t.tv_sec * 1e9 + t.tv_nsec
 
-def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime):
+def expand_cminfo(cminfo, field, default='', nants=128):
+    x = [default for i in range(nants)]
+    for an, ant in enumerate(cminfo['antenna_numbers']):
+        x[ant] = cminfo[field][an]
+    return x
+
+
+
+
+def start_uv_file(filename, aa, pols, nchan, sfreq, sdf, inttime, cminfo=None):
     # Set the type of 'corr' to 'r' since we asked miriad to store visdata
     # as floats (aka reals) to avoid dynamic range problem with scaled shorts.
     # Note that this requires aipy version 1.0.1 or newer!!!
@@ -54,6 +64,15 @@ def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime):
     uv.add_var('nchan'   ,'i'); uv['nchan'] = nchan
     uv.add_var('nschan'  ,'i'); uv['nschan'] = nchan
     uv.add_var('inttime' ,'r'); uv['inttime'] = float(inttime)
+    if cminfo is not None:
+        uv.add_var('antnames', 'a'); uv['antnames'] = '[' + ', '.join(expand_cminfo(cminfo, 'antenna_names')) + ']'
+        uv.add_var('cmver',    'a'); uv['cmver']    = str(cminfo['cm_version'])
+        uv.add_var('st_type',  'a'); uv['st_type']  = '[' + ', '.join(expand_cminfo(cminfo, 'station_types')) + ']'
+        try:
+            cminfo.pop('antenna_positions') # this np array can't be json serialized
+            uv.add_var('cminfo', 'a'); uv['cminfo']   = json.dumps(cminfo)
+        except:
+            print 'failed to jsonify cminfo'
     # These variables just set to dummy values
     uv.add_var('vsource' ,'r'); uv['vsource'] = 0.
     uv.add_var('ischan'  ,'i'); uv['ischan'] = 1
@@ -79,7 +98,7 @@ class DataReceiver(rx.BufferSocket):
             nchan=2048, xeng_chan_mode=0, sfreq=0.121142578125, sdf=7.32421875e-05,
             inttime=14.3165578842, t_per_file=ephem.hour, payload_data_type=0,
             nwin=4, bufferslots=128, payload_len=8192, sdisp=0, sdisp_destination_ip="127.0.0.1",
-            acc_len=1024*128, redis=None, hookup=None):
+            acc_len=1024*128, redis=None, hookup=None, cminfo=None):
         rx.BufferSocket.__init__(self, item_count=bufferslots, payload_len=payload_len)
         self.cb = rx.CollateBuffer(nant=len(aa), nants_per_feng=nants_per_feng, npol=len(pols),
             nchan=nchan, xeng_chan_mode=xeng_chan_mode, nwin=nwin, sdisp=sdisp,
@@ -97,6 +116,7 @@ class DataReceiver(rx.BufferSocket):
         self.hookup = hookup
         self.uvio_total_ns = 0
         self.uvio_calls = 0
+        self.cminfo = cminfo
 
         def filewrite_callback(i,j,pol,tcnt,data,flags):
             # The parameters i, j, and pol have been derived solely from
@@ -232,10 +252,8 @@ class DataReceiver(rx.BufferSocket):
                         fnamepol, aa, npol=1, nchan=nchan,
                         sfreq=sfreq, sdf=sdf, inttime=inttime)
                     # Set the file start time and obsid
-                    self.uv[pol]['obsid'] = hera_mc.utils.calculate_obsid(astro_time)
-                    self.uv[pol]['startt'] = astro_time.gps
-                    # One unique polarization per file
-                    self.uv[pol]['pol'] = a.miriad.str2pol[pols[pol]]
+                    self.uv['obsid'] = hera_mc.utils.calculate_obsid(astro_time)
+                    self.uv['startt'] = astro_time.gps
 
                 aa.set_jultime(t)
                 lst = aa.sidereal_time()

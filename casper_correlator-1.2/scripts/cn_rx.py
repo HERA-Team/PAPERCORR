@@ -9,48 +9,79 @@ syslog.openlog('cn_rx.py')
 if len(sys.argv) < 2:
     print 'Please specify configuration file.'
     exit()
+    
 
-# Returns hookup dictionary mapping correlator input number to [antnum, pol],
+def get_cminfo():
+    print 'Attempting to retreive hookup from CM database'
+    from hera_mc import mc, geo_handling, cm_utils
+    parser = mc.get_mc_argument_parser()
+    print 'parsing_args'
+    args = parser.parse_args(args=[])
+    print args
+    db = mc.connect_to_mc_db(args)
+    session = db.sessionmaker()
+    h = geo_handling.Handling(session)
+    print 'Querying database...'
+    return h.get_cminfo_correlator()
+
+# Returns hookup, antpos, where  hookup  isdictionary mapping correlator input number to [antnum, pol],
 # where antnum ranges from 0 to nants-1 and pol is either 'X' or 'Y'.
-# Currently gets the data from /etc/papercfg/psa128/fxin_to_antpol.yml.
-def get_hookup():
-    hookup_name = '/etc/papercfg/psa128/fxin_to_antpol.yml'
+# antpos is an nants x 3 numpy array of miriad-format antenna positions
+
+def get_hookup_and_antpos(nants, cminfo):
+    #hookup_name = '/etc/papercfg/psa128/fxin_to_antpol.yml'
     hookup = {}
+    # The correlator has 256 inputs (128 ants dual-pol)
+    # Track the antennas which are connected, so that we can
+    # create dummy hookups for the remaining inputs
+    used_ants = {'x':[], 'y':[]}
+    ninputs = 2*nants
+    for i in range(ninputs):
+        hookup[i] = None
 
-    try:
-        print 'Using fxin-to-antpol file', hookup_name
+    antpos = numpy.zeros([nants,3])
 
-        hookup_file = open(hookup_name)
-        try:
-            yaml_hookup = yaml.load(hookup_file.read())
-        finally:
-            hookup_file.close()
+    for kn, k in enumerate(cminfo['correlator_inputs']):
+        for pn, pol in enumerate(k):
+            # k is ("DfFAC", "DfFAC"), where F is '1'..'8', A is 'A'..'H', and C is
+            # '1'..'4'. The two entries are for the X and Y pols
 
-        for k,v in yaml_hookup.items():
-            if v is not None:
-                # k is "fFAC", where F is '1'..'8', A is 'A'..'H', and C is
-                # '1'..'4'.
-                #
-                # v is "aNNNP", where NNN is a one to three digit number
-                # and P is 'X' or 'Y'.
+            # Convert pol to fx input number.
+            f = int(pol[2]) - 1        # read F and convert to zero-indexed numbering
+            a = ord(pol[3]) - ord('A') # read A and convert to zero-indexed numbering
+            c = int(pol[4]) - 1        # read C and convert to zero-indexed numbering
+            fxin = 32*f + 4*a + c
 
-                # Convert k to fx input number.
-                f = int(k[1]) - 1
-                a = ord(k[2]) - ord('A')
-                c = int(k[3]) - 1
-                fxin = 32*f + 4*a + c
+            # Convert v to [integer_ant, lowecase_pol]
+            antpol = [cminfo['antenna_numbers'][kn], ['x','y'][pn]] 
+            print 'Found antenna', antpol, 'in hookup at input', fxin, '(', pol, ')'
 
-                # Convert v to [integer_ant, lowecase_pol]
-                antpol = [int(v[1:-1]), str.lower(v[-1])]
+            # Store in hookup dictionary
+            hookup[fxin] = antpol
+            antpos[antpol[0]] = cminfo['antenna_positions'][kn]
 
-                # Store in hookup dictionary
-                hookup[fxin] = antpol
-    except:
-        print sys.exc_info()[0]
-        print 'Defaulting hookup info!!!'
-        hookup = None
+    # Make sure all inputs are conencted to something, even if it's made up.
+    for key, val in hookup.iteritems():
+        if val is not None:
+            used_ants[val[1]] += [val[0]]
 
-    return hookup
+    for i in range(ninputs):
+        if hookup[i] is None:
+            for ant in range(nants):
+                if ant not in used_ants['x']:
+                    hookup[i] = [ant, 'x']
+                    used_ants['x'] += [ant]
+                    #print 'faking ant %dx for input %d' % (ant, i)
+                    break
+                elif ant not in used_ants['y']:
+                    hookup[i] = [ant, 'y']
+                    used_ants['y'] += [ant]
+                    #print 'faking ant %dy for input %d' % (ant, i)
+                    break
+                if ant == (nants-1):
+                    print "Failed to find a fake antenna for input %d" % i
+
+    return hookup, antpos
 
 # Returns list of 3-tuples of antenna positions for ants 0 to nants-1.
 # Currently gets the data from /etc/papercfg/psa128/ant_to_pos.yml.
@@ -118,24 +149,29 @@ bandwidth = c.config['adc_clk']/2 # GHz
 sdf = bandwidth/n_chans
 sfreq = bandwidth # Second Nyquist zone
 
+cminfo = get_cminfo()
+#print cminfo
+#print cminfo.keys()
+hookup, ants = get_hookup_and_antpos(nants, cminfo)
+#print hookup
+#print ants
+
 # This is the closest I have found to an offical position for PSA.
 # TODO Get this info from the config file.
-latitude  = -30.72149 * math.pi / 180.0
-longitude = +21.42829 * math.pi / 180.0
-# I found 1058 m and 1085 m in different paperwiki posts, so use 1075.0.
-altitude  = 1075.0
+latitude  = cminfo['cofa_lat']
+longitude = cminfo['cofa_lon']
+altitude  = cminfo['cofa_alt']
 location = latitude, longitude, altitude
 
 acc_len = c.config['acc_len'] * c.config['xeng_acc_len']
 int_time = 2*n_chans*acc_len/(bandwidth*2*1e9) #integration time in seconds
+# incoming data divided by this number for correct scaling
 #acc_len = 1
- # incoming data divided by this number for correct scaling
 t_per_file=ephem.minute*10
 n_windows_to_buffer=4
 n_bufferslots=10240
 max_payload_len=8192
 payload_data_type = c.config['payload_data_type']
-ants=get_antpos(nants)
 pols=['xx','yy','xy','yx']
 freqs = numpy.arange(n_chans, dtype=numpy.float) * sdf + sfreq
 beam = aipy.phs.Beam(freqs)
@@ -144,7 +180,6 @@ aa = aipy.phs.AntennaArray(ants=ants, location=location)
 sdisp_destination_ip = "127.0.0.1"
 rx=None
 use_redis = c.redis
-hookup = get_hookup()
 
 if len(sys.argv) > 2 and sys.argv[2] == '--no-redis':
     use_redis = None
@@ -170,7 +205,7 @@ try:
                 nwin=n_windows_to_buffer, bufferslots=n_bufferslots,
                 payload_len=max_payload_len, payload_data_type=payload_data_type,
                 sdisp=0, sdisp_destination_ip=sdisp_destination_ip,
-                acc_len=acc_len, redis=use_redis, hookup=hookup)
+                acc_len=acc_len, redis=use_redis, hookup=hookup, cminfo=cminfo)
     rx.start(port)
 
     signal.signal(signal.SIGINT, stop_taking_data)
