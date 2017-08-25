@@ -32,9 +32,6 @@ def expand_cminfo(cminfo, field, default='', nants=128):
         x[ant] = cminfo[field][an]
     return x
 
-
-
-
 def start_uv_file(filename, aa, pols, nchan, sfreq, sdf, inttime, cminfo=None):
     # Set the type of 'corr' to 'r' since we asked miriad to store visdata
     # as floats (aka reals) to avoid dynamic range problem with scaled shorts.
@@ -66,9 +63,10 @@ def start_uv_file(filename, aa, pols, nchan, sfreq, sdf, inttime, cminfo=None):
     uv.add_var('nschan'  ,'i'); uv['nschan'] = nchan
     uv.add_var('inttime' ,'r'); uv['inttime'] = float(inttime)
     if cminfo is not None:
-        uv.add_var('antnames', 'a'); uv['antnames'] = '[' + ', '.join(expand_cminfo(cminfo, 'antenna_names')) + ']'
+        uv.add_var('antnums',  'd'); uv['antnums']  = n.array(cminfo['antenna_numbers'], dtype=n.float64)
+        uv.add_var('antnames', 'a'); uv['antnames'] = '[' + ', '.join(cminfo['antenna_names']) + ']'
         uv.add_var('cmver',    'a'); uv['cmver']    = str(cminfo['cm_version'])
-        uv.add_var('st_type',  'a'); uv['st_type']  = '[' + ', '.join(expand_cminfo(cminfo, 'station_types')) + ']'
+        uv.add_var('st_type',  'a'); uv['st_type']  = '[' + ', '.join(cminfo['station_types']) + ']'
         try:
             cminfo.pop('antenna_positions') # this np array can't be json serialized
             uv.add_var('cminfo', 'a'); uv['cminfo']   = json.dumps(cminfo)
