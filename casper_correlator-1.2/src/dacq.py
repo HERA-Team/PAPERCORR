@@ -67,7 +67,8 @@ def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime, cminfo=None):
         uv.add_var('cmver',    'a'); uv['cmver']    = str(cminfo['cm_version'])
         uv.add_var('st_type',  'a'); uv['st_type']  = '[' + ', '.join(cminfo['station_types']) + ']'
         try:
-            cminfo.pop('antenna_positions') # this np array can't be json serialized
+            if 'antenna_positions' in cminfo.keys():
+                cminfo.pop('antenna_positions') # this np array can't be json serialized
             uv.add_var('cminfo', 'a'); uv['cminfo']   = json.dumps(cminfo)
         except:
             print 'failed to jsonify cminfo'
@@ -248,7 +249,7 @@ class DataReceiver(rx.BufferSocket):
                     # Start new single cross-pol dataset
                     self.uv[pol] = start_uv_file(
                         fnamepol, aa, npol=1, nchan=nchan,
-                        sfreq=sfreq, sdf=sdf, inttime=inttime)
+                        sfreq=sfreq, sdf=sdf, inttime=inttime, cminfo=self.cminfo)
                     # Set the file start time and obsid
                     self.uv[pol]['obsid'] = hera_mc.utils.calculate_obsid(astro_time)
                     self.uv[pol]['startt'] = astro_time.gps
