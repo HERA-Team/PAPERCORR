@@ -1,4 +1,5 @@
-#!/usr/bin/python -u
+#!/usr/bin/env python
+
 import casper_correlator,corr,ephem,aipy,numpy,sys,socket,time,struct,syslog,signal
 import yaml
 import math
