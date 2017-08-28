@@ -158,8 +158,9 @@ hookup, ants = get_hookup_and_antpos(nants, cminfo)
 
 # This is the closest I have found to an offical position for PSA.
 # TODO Get this info from the config file.
-latitude  = cminfo['cofa_lat']
-longitude = cminfo['cofa_lon']
+# convert from degrees -> radians
+latitude  = cminfo['cofa_lat'] * math.pi / 180.
+longitude = cminfo['cofa_lon'] * math.pi / 180.
 altitude  = cminfo['cofa_alt']
 location = latitude, longitude, altitude
 

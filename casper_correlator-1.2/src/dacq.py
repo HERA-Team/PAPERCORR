@@ -39,8 +39,8 @@ def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime, cminfo=None):
     uv = a.miriad.UV(filename, status='new', corrmode='r')
     uv._wrhd('obstype','mixed-auto-cross')
     uv._wrhd('history','CORR-DACQ: created file.\n')
-    uv.add_var('telescop','a'); uv['telescop'] = 'PAPER'
-    uv.add_var('operator','a'); uv['operator'] = 'PAPER'
+    uv.add_var('telescop','a'); uv['telescop'] = 'HERA'
+    uv.add_var('operator','a'); uv['operator'] = 'HERA'
     uv.add_var('version' ,'a'); uv['version'] = '1.3.0'
     uv.add_var('epoch'   ,'r'); uv['epoch'] = 2000.
     uv.add_var('source'  ,'a'); uv['source'] = 'zenith'
