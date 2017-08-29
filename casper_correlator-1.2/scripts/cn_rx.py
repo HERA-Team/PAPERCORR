@@ -179,6 +179,9 @@ aa = aipy.phs.AntennaArray(ants=ants, location=location)
 sdisp_destination_ip = "127.0.0.1"
 rx=None
 use_redis = c.redis
+# Finally list-ify antenna_positions in the cminfo, so that cminfo is
+# json serializeable by the file-writer
+cminfo['antenna_positions'] = cminfo['antenna_positions'].tolist()
 
 if len(sys.argv) > 2 and sys.argv[2] == '--no-redis':
     use_redis = None

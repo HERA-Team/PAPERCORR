@@ -71,9 +71,7 @@ def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime, cminfo=None):
         uv.add_var('cmver',    'a'); uv['cmver']    = str(cminfo['cm_version'])
         uv.add_var('st_type',  'a'); uv['st_type']  = '[' + ', '.join(cminfo['station_types']) + ']'
         try:
-            if 'antenna_positions' in cminfo.keys():
-                cminfo.pop('antenna_positions') # this np array can't be json serialized
-            uv.add_var('cminfo', 'a'); uv['cminfo']   = json.dumps(cminfo)
+            uv.add_var('cminfo', 'a'); uv['cminfo'] = json.dumps(cminfo)
         except:
             print 'failed to jsonify cminfo'
     # These variables just set to dummy values
