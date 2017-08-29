@@ -150,9 +150,9 @@ sfreq = bandwidth # Second Nyquist zone
 cminfo = get_cminfo()
 #print cminfo
 #print cminfo.keys()
-hookup, ants = get_hookup_and_antpos(nants, cminfo)
+hookup, antpos = get_hookup_and_antpos(nants, cminfo)
 #print hookup
-#print ants
+#print antpos
 
 # This is the closest I have found to an offical position for PSA.
 # TODO Get this info from the config file.
@@ -174,7 +174,7 @@ payload_data_type = c.config['payload_data_type']
 pols=['xx','yy','xy','yx']
 freqs = numpy.arange(n_chans, dtype=numpy.float) * sdf + sfreq
 beam = aipy.phs.Beam(freqs)
-ants = [aipy.phs.Antenna(a[0],a[1],a[2],beam) for a in ants]
+ants = [aipy.phs.Antenna(a[0],a[1],a[2],beam) for a in antpos]
 aa = aipy.phs.AntennaArray(ants=ants, location=location)
 sdisp_destination_ip = "127.0.0.1"
 rx=None
