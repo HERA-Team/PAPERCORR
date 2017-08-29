@@ -8,6 +8,9 @@ import astropy.time
 import json
 
 CLOCK_MONOTONIC_RAW = 4 # see <linux/time.h>
+# Add data types for custom header entries
+a.miriad.itemtable['stopt'] = 'd'
+a.miriad.itemtable['duration'] = 'd'
 
 class timespec(ctypes.Structure):
     _fields_ = [
@@ -88,9 +91,9 @@ def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime, cminfo=None):
     uv.add_var('pol'     ,'i')
     # Variables added in July 2017 for HERA deployment
     uv.add_var('startt'   ,'d') # double precision gps time of first integration
-    uv.add_var('stopt'    ,'d') # double precicion gps time of last integration
     uv.add_var('obsid'    ,'i') # int(floor(starttime))
-    uv.add_var('duration' ,'i') # integer seconds of an observation (starttime - stoptime)
+    # We don't add variables for stopt / duration, which live in the header
+    # For consistency, should a bunch of the stuff above also be in the header?
     return uv
 
 class DataReceiver(rx.BufferSocket):
@@ -110,6 +113,7 @@ class DataReceiver(rx.BufferSocket):
         self.fname = [None] * npol
         self.filestart = [0.] * npol
         self.current_time = [0] * npol
+        self.astro_time = None
         self.t_per_file = t_per_file
         self.adc_rate=float(adc_rate)
         self.redis = redis
@@ -210,6 +214,9 @@ class DataReceiver(rx.BufferSocket):
 
             if (t != self.current_time[pol]):
                 self.current_time[pol] = t
+                # Get the astropy.Time version of the time -- we're going to need it
+                # to write the time-related file variables
+                self.astro_time = astropy.time.Time(t_unix, format='unix')
 
                 if self.uvio_calls > 0 and pol == 0:
                     print 'Total time spent in %s uvio calls is %.1f seconds (%f ns/call)' % (
@@ -218,13 +225,10 @@ class DataReceiver(rx.BufferSocket):
                     self.uvio_total_ns = 0
 
                 if (t > (self.filestart[pol] + self.t_per_file)) or self.uv[pol] == None:
-                    # Get the astropy.Time version of the time -- we're going to need it
-                    # to write the time-related file variables
-                    astro_time = astropy.time.Time(t_unix, format='unix')
                     if self.uv[pol] != None:
                         # Write the stop-time variables
-                        uv[pol]['stoptime'] = astro_time.gps
-                        uv[pol]['duration'] = int(n.floor(astro_time.gps - uv[pol]['starttime']))
+                        self.uv[pol]['stopt'] = self.astro_time.gps
+                        self.uv[pol]['duration'] = self.astro_time.gps - self.uv[pol]['startt'] +self.uv[pol]['inttime']
                         # Work with filename for the given polarization
                         fnamepol = self.fname[pol]
                         # Get reference to the UV object self.uv[pol] and set
@@ -252,8 +256,8 @@ class DataReceiver(rx.BufferSocket):
                         fnamepol, aa, npol=1, nchan=nchan,
                         sfreq=sfreq, sdf=sdf, inttime=inttime, cminfo=self.cminfo)
                     # Set the file start time and obsid
-                    self.uv[pol]['obsid'] = hera_mc.utils.calculate_obsid(astro_time)
-                    self.uv[pol]['startt'] = astro_time.gps
+                    self.uv[pol]['obsid'] = hera_mc.utils.calculate_obsid(self.astro_time)
+                    self.uv[pol]['startt'] = self.astro_time.gps
                     # One unique polarization per file
                     self.uv[pol]['pol'] = a.miriad.str2pol[pols[pol]]
 
@@ -304,6 +308,14 @@ class DataReceiver(rx.BufferSocket):
             # guaranteed to be called!), which will close the datasets.  In
             # practice this works OK with the standard python implementation
             # (aka "CPython").
+            #print self.astro_time.gps
+            #print self.uv
+            for pol in self.uv:
+                try:
+                    pol['stopt'] = self.astro_time.gps
+                    pol['duration'] = self.astro_time.gps - pol['startt'] + pol['inttime']
+                except:
+                    print 'Failed to insert file duration / stop-time'
             del(self.uv)
         # Rename datasets
         for fnamepol in self.fname:
