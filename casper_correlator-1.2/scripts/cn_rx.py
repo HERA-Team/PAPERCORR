@@ -3,6 +3,7 @@
 import casper_correlator,corr,ephem,aipy,numpy,sys,socket,time,struct,syslog,signal
 import yaml
 import math
+import pickle
 
 syslog.openlog('cn_rx.py')
 
@@ -148,6 +149,19 @@ sdf = bandwidth/n_chans
 sfreq = bandwidth # Second Nyquist zone
 
 cminfo = get_cminfo()
+# check that cminfo returned useful data
+if cminfo['antpos'] == []:
+    # read in pickle backup; warn if it doesn't exist
+    try:
+        fn = '/home/obs/latest_cminfo.pkl'
+        with open(fn, 'r') as f:            
+            cminfo = pickle.load(f)
+    except:
+        print "Failed to read cminfo and could not load backup"
+    else:
+        # dump the latest and greatest to a pickle file
+        with open(fn, 'w') as f:
+            pickle.dump(cminfo, f)
 #print cminfo
 #print cminfo.keys()
 hookup, antpos = get_hookup_and_antpos(nants, cminfo)
