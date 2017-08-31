@@ -150,7 +150,7 @@ sfreq = bandwidth # Second Nyquist zone
 
 cminfo = get_cminfo()
 # check that cminfo returned useful data
-if cminfo['antpos'] == []:
+if cminfo['antenna_positions'] == []:
     # read in pickle backup; warn if it doesn't exist
     try:
         fn = '/home/obs/latest_cminfo.pkl'
