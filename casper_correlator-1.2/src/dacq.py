@@ -7,6 +7,8 @@ import hera_mc.utils
 import astropy.time
 import json
 import pyuvdata
+from astropy import constants as const
+from pyuvdata import utils as uvutils
 
 CLOCK_MONOTONIC_RAW = 4 # see <linux/time.h>
 # Add data types for custom header entries
@@ -121,6 +123,10 @@ class DataReceiver(rx.BufferSocket):
         self.uvio_calls = 0
         self.cminfo = cminfo
 
+        antpos = n.array([ant.pos for ant in aa], dtype=n.double) * const.c.to('m/ns').value
+        antpos = uvutils.ECEF_from_rotECEF(antpos, aa.long)
+        antpos = uvutils.ENU_from_ECEF(antpos.T, aa.lat, aa.long, aa.elev) / const.c.to('m/ns').value
+
         def filewrite_callback(i,j,pol,tcnt,data,flags):
             # The parameters i, j, and pol have been derived solely from
             # correlator input index and may have nothing to do with actual
@@ -202,7 +208,7 @@ class DataReceiver(rx.BufferSocket):
             #t is julian date. ephem measures days since noon, 31st Dec 1899 (!random!), so we need an offset from uni time:
             t_unix = tcnt / self.adc_rate
             t = a.phs.ephem2juldate((t_unix + 2209032000)*ephem.second)
-            
+
 
             #print "fwrite callback:",i,j,pol,tcnt,data.size,flags.size
 
@@ -266,8 +272,7 @@ class DataReceiver(rx.BufferSocket):
                 self.uv[pol]['ra'] = lst
                 self.uv[pol]['obsra'] = lst
 
-            #crd = aa[j].pos - aa[i].pos
-            crd = aa.get_baseline(i, j, 'z')
+            crd = antpos[j] - antpos[i]
             preamble = (crd, t, (i,j))
 
             # Only clip RFI if visibilities are being stored as scaled shorts
