@@ -6,6 +6,7 @@ import ctypes
 import hera_mc.utils
 import astropy.time
 import json
+import pyuvdata
 
 CLOCK_MONOTONIC_RAW = 4 # see <linux/time.h>
 # Add data types for custom header entries
@@ -265,7 +266,8 @@ class DataReceiver(rx.BufferSocket):
                 self.uv[pol]['ra'] = lst
                 self.uv[pol]['obsra'] = lst
 
-            crd = aa[j].pos - aa[i].pos
+            #crd = aa[j].pos - aa[i].pos
+            crd = aa.get_baseline(i, j, 'z')
             preamble = (crd, t, (i,j))
 
             # Only clip RFI if visibilities are being stored as scaled shorts

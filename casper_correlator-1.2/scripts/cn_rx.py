@@ -11,7 +11,7 @@ syslog.openlog('cn_rx.py')
 if len(sys.argv) < 2:
     print 'Please specify configuration file.'
     exit()
-    
+
 
 def get_cminfo():
     print 'Attempting to retreive hookup from CM database'
