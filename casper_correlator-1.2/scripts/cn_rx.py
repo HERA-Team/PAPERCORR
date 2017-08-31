@@ -4,6 +4,7 @@ import casper_correlator,corr,ephem,aipy,numpy,sys,socket,time,struct,syslog,sig
 import yaml
 import math
 import pickle
+import astropy.constants as const
 
 syslog.openlog('cn_rx.py')
 
@@ -57,7 +58,11 @@ def get_hookup_and_antpos(nants, cminfo):
 
             # Store in hookup dictionary
             hookup[fxin] = antpol
-            antpos[antpol[0]] = cminfo['antenna_positions'][kn]
+
+            # antpos from cminfo are in rotECEF coordinates, in meters
+            # MIRIAD is expecting rotECEF in nanoseconds, need to convert
+            c_ns = const.c.to('m/ns').value
+            antpos[antpol[0]] = cminfo['antenna_positions'][kn] / c_ns
 
     # Make sure all inputs are conencted to something, even if it's made up.
     for key, val in hookup.iteritems():
