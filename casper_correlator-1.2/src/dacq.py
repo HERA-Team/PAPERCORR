@@ -125,7 +125,7 @@ class DataReceiver(rx.BufferSocket):
 
         antpos = n.array([ant.pos for ant in aa], dtype=n.double) * const.c.to('m/ns').value
         antpos = uvutils.ECEF_from_rotECEF(antpos, aa.long)
-        antpos = uvutils.ENU_from_ECEF(antpos.T, aa.lat, aa.long, aa.elev) / const.c.to('m/ns').value
+        self.antpos = uvutils.ENU_from_ECEF(antpos.T, aa.lat, aa.long, aa.elev).T / const.c.to('m/ns').value
 
         def filewrite_callback(i,j,pol,tcnt,data,flags):
             # The parameters i, j, and pol have been derived solely from
@@ -272,7 +272,7 @@ class DataReceiver(rx.BufferSocket):
                 self.uv[pol]['ra'] = lst
                 self.uv[pol]['obsra'] = lst
 
-            crd = antpos[j] - antpos[i]
+            crd = self.antpos[j] - self.antpos[i]
             preamble = (crd, t, (i,j))
 
             # Only clip RFI if visibilities are being stored as scaled shorts
