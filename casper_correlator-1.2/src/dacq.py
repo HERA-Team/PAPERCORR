@@ -53,6 +53,7 @@ def start_uv_file(filename, aa, npol, nchan, sfreq, sdf, inttime, cminfo=None):
     uv.add_var('obsdec'  ,'d'); uv['obsdec'] = aa.lat
     uv.add_var('longitu' ,'d'); uv['longitu'] = aa.long
     uv.add_var('altitude','d'); uv['altitude'] = aa.elev
+    uv.add_var('antdiam' ,'d'); uv['antdiam'] = 14.0
     uv.add_var('npol'    ,'i'); uv['npol'] = npol
     uv.add_var('nspect'  ,'i'); uv['nspect'] = 1
     uv.add_var('nants'   ,'i'); uv['nants'] = len(aa)
