@@ -16,7 +16,7 @@ if len(sys.argv) < 2:
 
 def get_cminfo():
     print 'Attempting to retreive hookup from CM database'
-    from hera_mc import mc, geo_handling, cm_utils
+    from hera_mc import mc, sys_handling, cm_utils
     parser = mc.get_mc_argument_parser()
     args = parser.parse_args(args=[]) # args=[] to throw away command line arguments
     db = mc.connect_to_mc_db(args)
