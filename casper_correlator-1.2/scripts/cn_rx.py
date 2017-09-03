@@ -21,7 +21,7 @@ def get_cminfo():
     args = parser.parse_args(args=[]) # args=[] to throw away command line arguments
     db = mc.connect_to_mc_db(args)
     session = db.sessionmaker()
-    h = geo_handling.Handling(session)
+    h = sys_handling.Handling(session)
     return h.get_cminfo_correlator()
 
 # Returns hookup, antpos, where  hookup  isdictionary mapping correlator input number to [antnum, pol],
