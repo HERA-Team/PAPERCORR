@@ -1,3 +1,13 @@
+HERA Correlator dependencies:
+pip install "construct==2.0.6"
+conda install pyyaml
+katcp-0.3.4
+pyuvdata
+aipy
+PAPERCORR/casper_correlator-1.2
+PAPERCORR/corr-0.4.2.2010-10-14
+
+
 some redis keys:
 'pxi:adc_sum',
 'pxi:adc_sum_squares',
