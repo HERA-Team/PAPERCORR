@@ -310,14 +310,11 @@ class DataReceiver(rx.BufferSocket):
             # practice this works OK with the standard python implementation
             # (aka "CPython").
             #print self.astro_time.gps
-            #print self.uv
-            for pol in self.uv:
-                try:
-                    pol['stopt'] = self.astro_time.gps
-                    pol['duration'] = self.astro_time.gps - pol['startt'] + pol['inttime']
-                except:
-                    print 'Failed to insert file duration / stop-time'
-            del(self.uv)
+            for pol in xrange(len(self.uv)):
+                self.uv[pol]['stopt'] = self.astro_time.gps
+                self.uv[pol]['duration'] = self.astro_time.gps - self.uv[pol]['startt'] + self.uv[pol]['inttime']
+                uvpol, self.uv[pol] = self.uv[pol], None
+                del(uvpol)
         # Rename datasets
         for fnamepol in self.fname:
             if fnamepol is not None:
