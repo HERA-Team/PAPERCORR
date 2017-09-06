@@ -6,6 +6,7 @@ pyuvdata
 aipy
 PAPERCORR/casper_correlator-1.2
 PAPERCORR/corr-0.4.2.2010-10-14
+git clone https://github.com/nrao/ValonSynth; python setup.py install
 
 
 some redis keys:
