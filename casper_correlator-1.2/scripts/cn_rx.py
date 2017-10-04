@@ -28,12 +28,13 @@ def get_cminfo():
 # where antnum ranges from 0 to nants-1 and pol is either 'X' or 'Y'.
 # antpos is an nants x 3 numpy array of miriad-format antenna positions
 
-def get_hookup_and_antpos(nants, cminfo):
+def get_hookup_and_antpos(cminfo):
     #hookup_name = '/etc/papercfg/psa128/fxin_to_antpol.yml'
     hookup = {}
     # The correlator has 256 inputs (128 ants dual-pol)
     # Track the antennas which are connected, so that we can
     # create dummy hookups for the remaining inputs
+    nants = max(cminfo['antenna_numbers'])+1
     used_ants = {'x':[], 'y':[]}
     ninputs = 2*nants
     for i in range(ninputs):
@@ -169,7 +170,7 @@ if cminfo['antenna_positions'] == []:
             pickle.dump(cminfo, f)
 #print cminfo
 #print cminfo.keys()
-hookup, antpos = get_hookup_and_antpos(nants, cminfo)
+hookup, antpos = get_hookup_and_antpos(cminfo)
 #print hookup
 #print antpos
 
