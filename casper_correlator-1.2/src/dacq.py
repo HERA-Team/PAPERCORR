@@ -101,9 +101,9 @@ class DataReceiver(rx.BufferSocket):
             nchan=2048, xeng_chan_mode=0, sfreq=0.121142578125, sdf=7.32421875e-05,
             inttime=14.3165578842, t_per_file=ephem.hour, payload_data_type=0,
             nwin=4, bufferslots=128, payload_len=8192, sdisp=0, sdisp_destination_ip="127.0.0.1",
-            acc_len=1024*128, redis=None, hookup=None, cminfo=None):
+            acc_len=1024*128, redis=None, hookup=None, cminfo=None,nants_corr=128):
         rx.BufferSocket.__init__(self, item_count=bufferslots, payload_len=payload_len)
-        self.cb = rx.CollateBuffer(nant=len(aa), nants_per_feng=nants_per_feng, npol=len(pols),
+        self.cb = rx.CollateBuffer(nant=nants_corr, nants_per_feng=nants_per_feng, npol=len(pols),
             nchan=nchan, xeng_chan_mode=xeng_chan_mode, nwin=nwin, sdisp=sdisp,
             sdisp_destination_ip=sdisp_destination_ip, acc_len=acc_len)
         # Define a file-writing callback that starts/ends files when

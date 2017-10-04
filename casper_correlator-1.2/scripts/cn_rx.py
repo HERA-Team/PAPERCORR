@@ -227,7 +227,8 @@ try:
                 nwin=n_windows_to_buffer, bufferslots=n_bufferslots,
                 payload_len=max_payload_len, payload_data_type=payload_data_type,
                 sdisp=0, sdisp_destination_ip=sdisp_destination_ip,
-                acc_len=acc_len, redis=use_redis, hookup=hookup, cminfo=cminfo)
+                acc_len=acc_len, redis=use_redis, hookup=hookup, cminfo=cminfo,
+                nants_corr=nants)
     rx.start(port)
 
     signal.signal(signal.SIGINT, stop_taking_data)
