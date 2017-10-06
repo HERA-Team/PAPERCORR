@@ -186,7 +186,7 @@ acc_len = c.config['acc_len'] * c.config['xeng_acc_len']
 int_time = 2*n_chans*acc_len/(bandwidth*2*1e9) #integration time in seconds
 # incoming data divided by this number for correct scaling
 #acc_len = 1
-t_per_file=ephem.minute*10.5
+t_per_file=ephem.minute*10.7
 n_windows_to_buffer=4
 n_bufferslots=10240
 max_payload_len=8192
