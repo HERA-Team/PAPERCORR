@@ -4,15 +4,27 @@ import casper_correlator,corr,ephem,aipy,numpy,sys,socket,time,struct,syslog,sig
 import yaml
 import math
 import pickle
+import redis
 import astropy.constants as const
 
 syslog.openlog('cn_rx.py')
+CMINFO_BACKUP = '/home/obs/latest_cminfo.pkl'
 
 # 2-14-2011 Z.A. added 16-31 in 'ants'. preparation for 64 input corr.
 if len(sys.argv) < 2:
     print 'Please specify configuration file.'
     exit()
 
+def get_cminfo_from_backup(filename):
+    try:
+        with open(filename, 'r') as f:
+            return pickle.load(f)
+    except:
+        return None
+
+def write_cminfo_backup(filename, cminfo):
+    with open(filename, 'w') as f:
+        pickle.dump(cminfo, f)
 
 def get_cminfo():
     print 'Attempting to retreive hookup from CM database'
@@ -154,20 +166,24 @@ bandwidth = c.config['adc_clk']/2 # GHz
 sdf = bandwidth/n_chans
 sfreq = bandwidth # Second Nyquist zone
 
-cminfo = get_cminfo()
-# check that cminfo returned useful data
-if cminfo['antenna_positions'] == []:
-    # read in pickle backup; warn if it doesn't exist
-    try:
-        fn = '/home/obs/latest_cminfo.pkl'
-        with open(fn, 'r') as f:            
-            cminfo = pickle.load(f)
-    except:
-        print "Failed to read cminfo and could not load backup"
+# Try and get cminfo from the database.
+# If this fails, use a local backup.
+# Use redis `cminfo_source` key to record the failure
+rh = redis.Redis('redishost')
+try:
+    cminfo = get_cminfo()
+    if cminfo['antenna_positions'] == []:
+        print 'cminfo doesn\'t contain antenna positions. Trying backup'
+        cminfo = get_cminfo_from_backup(CMINFO_BACKUP)
     else:
-        # dump the latest and greatest to a pickle file
-        with open(fn, 'w') as f:
-            pickle.dump(cminfo, f)
+        write_cminfo_backup(CMINFO_BACKUP, cminfo)
+    rh['cminfo_source'] = 'DATABASE (%s)' % time.ctime()
+except:
+    print 'Failed to retrieve cminfo from database. Trying backup'
+    cminfo = get_cminfo_from_backup(CMINFO_BACKUP)
+    rh['cminfo_source'] = 'BACKUP (%s)' % time.ctime()
+del(rh)
+
 #print cminfo
 #print cminfo.keys()
 hookup, antpos = get_hookup_and_antpos(cminfo)
